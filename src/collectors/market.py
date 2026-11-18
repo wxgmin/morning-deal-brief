@@ -120,11 +120,15 @@ def collect_market_series(companies: list, start_date: str, end_date: str, lookb
 
 
 def collect_market(companies: list, as_of_date: Optional[str] = None, lookback_days: int = 90) -> list:
-    """Return the latest completed trading day's PriceMove list (default: today)."""
+    """Return the latest COMPLETED trading day's PriceMove list (default: today).
+
+    A morning brief shows the latest session strictly before ``as_of_date``, so a
+    partially-traded current day is never selected.
+    """
     end = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.today()
-    # Widen so Mondays and post-holiday mornings still find the prior session.
     start = (end - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
-    series = collect_market_series(companies, start, end.strftime("%Y-%m-%d"), lookback_days)
+    end_exclusive = (end - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    series = collect_market_series(companies, start, end_exclusive, lookback_days)
     if not series:
         return []
     latest = max(series.keys())

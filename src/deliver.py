@@ -35,7 +35,8 @@ def _slack_link(url: str, label: str) -> str:
     url = _safe_http_url(url)
     if not url:
         return _slack_escape(label)
-    return f"<{url.replace('&', '&amp;')}|{_slack_escape(label)}>"
+    url = url.replace("<", "%3C").replace(">", "%3E").replace("|", "%7C")
+    return f"<{url}|{_slack_escape(label)}>"
 
 
 def _post_slack(webhook_url: str, blocks: list, text: str) -> None:
@@ -102,44 +103,48 @@ def send_email(smtp: dict, recipients: list, subject: str, body_plain: str, body
         server = smtplib.SMTP_SSL(smtp["host"], port, timeout=30, context=ctx)
     else:
         server = smtplib.SMTP(smtp["host"], port, timeout=30)
-        try:
+    try:
+        if port != 465:
             server.starttls(context=ctx)
-            if smtp.get("user"):
-                server.login(smtp["user"], smtp["password"])
-            server.send_message(msg)
-        finally:
-            server.quit()
+        if smtp.get("user"):
+            server.login(smtp["user"], smtp["password"])
+        server.send_message(msg)
+    finally:
+        server.quit()
 
 
 def deliver(cfg, date_str: str, brief_md: str, brief_html: str, brief_items, price_moves) -> None:
     s = cfg.settings
-
-    if s.delivery in ("slack", "both") and not s.slack_webhook_url:
-        raise RuntimeError("DELIVERY=slack/both but SLACK_WEBHOOK_URL is not set")
-    if s.delivery in ("email", "both") and not (s.smtp_host and s.email_recipients):
-        raise RuntimeError("DELIVERY=email/both but SMTP_HOST/EMAIL_RECIPIENTS are not set")
-
     errors = []
-    if s.delivery in ("slack", "both") and s.slack_webhook_url:
-        try:
-            send_slack(s.slack_webhook_url, date_str, brief_items, price_moves)
-        except Exception as exc:
-            logger.warning("Slack delivery failed: %s", exc, exc_info=True)
-            errors.append(f"slack: {exc}")
 
-    if s.delivery in ("email", "both") and s.smtp_host and s.email_recipients:
-        smtp = {
-            "host": s.smtp_host,
-            "port": s.smtp_port,
-            "user": s.smtp_user,
-            "password": s.smtp_password,
-            "from": s.smtp_from or s.smtp_user,
-        }
-        try:
-            send_email(smtp, s.email_recipients, f"Morning Deal Brief — {date_str}", brief_md, brief_html)
-        except Exception as exc:
-            logger.warning("Email delivery failed: %s", exc, exc_info=True)
-            errors.append(f"email: {exc}")
+    if s.delivery in ("slack", "both"):
+        if not s.slack_webhook_url:
+            logger.warning("DELIVERY includes slack but SLACK_WEBHOOK_URL is not set; skipping Slack")
+            errors.append("slack: SLACK_WEBHOOK_URL not set")
+        else:
+            try:
+                send_slack(s.slack_webhook_url, date_str, brief_items, price_moves)
+            except Exception as exc:
+                logger.warning("Slack delivery failed: %s", exc, exc_info=True)
+                errors.append(f"slack: {exc}")
+
+    if s.delivery in ("email", "both"):
+        if not (s.smtp_host and s.email_recipients):
+            logger.warning("DELIVERY includes email but SMTP_HOST/EMAIL_RECIPIENTS are not set; skipping email")
+            errors.append("email: SMTP_HOST/EMAIL_RECIPIENTS not set")
+        else:
+            smtp = {
+                "host": s.smtp_host,
+                "port": s.smtp_port,
+                "user": s.smtp_user,
+                "password": s.smtp_password,
+                "from": s.smtp_from or s.smtp_user,
+            }
+            try:
+                send_email(smtp, s.email_recipients, f"Morning Deal Brief — {date_str}", brief_md, brief_html)
+            except Exception as exc:
+                logger.warning("Email delivery failed: %s", exc, exc_info=True)
+                errors.append(f"email: {exc}")
 
     if errors:
         raise RuntimeError("Delivery failed: " + "; ".join(errors))

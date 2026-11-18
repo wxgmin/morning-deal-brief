@@ -141,7 +141,7 @@ def get_provider(cfg):
         return OpenAICompatProvider("openrouter", key, base_url=OPENROUTER_BASE) if key else NoneProvider()
     if p in ("local", "lmstudio"):
         base = s.llm_base_url or (LMSTUDIO_BASE if p == "lmstudio" else OLLAMA_BASE)
-        return OpenAICompatProvider(p, "local", base_url=base)
+        return OpenAICompatProvider(p, s.llm_api_key or "local", base_url=base)
 
     logger.warning("Unknown LLM_PROVIDER %r; using no-LLM fallback", p)
     return NoneProvider()

@@ -94,6 +94,17 @@ Anthropic → Gemini → OpenAI → none.
 
 Each run writes `archive/YYYY-MM-DD/{brief.md, brief.html, events.json}`.
 
+## Web dashboard
+
+Run a local dashboard to browse archived briefs and view the coverage list:
+
+```powershell
+.venv\Scripts\python.exe app.py
+```
+
+Then open <http://127.0.0.1:5000>. It shows the latest brief, a date list to browse
+past briefs, the coverage list, and a "Run now" button (archive-only, no delivery).
+
 ## Scheduling (n8n)
 
 1. Import `n8n/morning-deal-brief.json` into your n8n instance (Import from file).

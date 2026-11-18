@@ -127,14 +127,18 @@ def _run_backfill(cfg, days: int, end_date: str) -> None:
     dates = recent_weekdays(end_date, days)
     start, end = dates[0], dates[-1]
 
-    edgar_all = edgar.collect_filings(cfg.coverage.companies, start, end)
+    # Mirror the live 5-business-day catch-up window so backfilled briefs include
+    # filings from the prior business day / weekend gap.
+    edgar_start = recent_weekdays(start, 5)[0]
+    edgar_all = edgar.collect_filings(cfg.coverage.companies, edgar_start, end)
     # Extend the market window so the first brief date still has a prior session.
     market_start = (date.fromisoformat(start) - timedelta(days=7)).isoformat()
     market_series = market.collect_market_series(cfg.coverage.companies, market_start, end)
     trading_dates = sorted(market_series.keys())
 
     for d in dates:
-        day_edgar = [it for it in edgar_all if it.published == d]
+        window = set(recent_weekdays(d, 5))
+        day_edgar = [it for it in edgar_all if it.published in window]
         # A morning brief shows the latest COMPLETED trading day strictly before d.
         candidates = [t for t in trading_dates if t < d]
         day_moves = market_series[candidates[-1]] if candidates else []

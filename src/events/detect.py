@@ -43,10 +43,13 @@ KEYWORD_EVENTS = {
 
 
 def _hit(text: str, keyword: str) -> bool:
-    """Match whole tokens; multi-word keywords match as exact phrases."""
+    """Match whole tokens; multi-word keywords match as exact phrases. Single-token
+    keywords tolerate common inflections (plurals, past tense, -ing)."""
     if " " in keyword:
         return keyword in text
-    return re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", text) is not None
+    return re.search(
+        rf"(?<![a-z0-9]){re.escape(keyword)}(?:s|es|d|ed|ing)?(?![a-z0-9])", text
+    ) is not None
 
 
 def keyword_classify(text: str, default: str = "other") -> str:

@@ -92,10 +92,17 @@ def verify_grounding(summary: str, why_it_matters: str, figures_cited: list, sou
     corpus_figures = _extract_figure_values(source_text)
     ungrounded: list[str] = []
 
-    # 1. Strict verbatim check on self-declared figures.
+    # 1. Strict check on self-declared figures: numeric figures are matched by
+    #    unit+value (so formatting variants are tolerated and unit/scale mistakes
+    #    are caught); non-numeric entries fall back to normalized substring.
     for f in figures_cited:
-        if _normalize(str(f)) not in corpus_norm:
-            ungrounded.append(str(f))
+        s = str(f)
+        vals = [v for v in (_token_value(t) for t in extract_figures(s)) if v is not None]
+        if vals:
+            if not all(_matches(v, corpus_figures) for v in vals):
+                ungrounded.append(s)
+        elif _normalize(s) not in corpus_norm:
+            ungrounded.append(s)
 
     # 2. Independent backstop on currency/percentage figures the model may not
     #    have declared (unit-aware magnitude match).

@@ -1,6 +1,8 @@
 """Optional LLM refinement of rule-based event classification."""
 from __future__ import annotations
 
+import math
+
 from .. import llm
 
 
@@ -22,10 +24,12 @@ def classify_events(events: list, cfg) -> list:
                 confidence = float(result.get("confidence", ev.confidence))
             except (TypeError, ValueError):
                 confidence = ev.confidence
+            if not math.isfinite(confidence):
+                confidence = ev.confidence
             confidence = max(0.0, min(1.0, confidence))
             if label in llm.TAXONOMY:
                 ev.event_type = label
-            ev.confidence = confidence
+                ev.confidence = confidence
         except Exception:
             continue
     return events

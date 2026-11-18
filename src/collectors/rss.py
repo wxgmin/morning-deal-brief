@@ -44,8 +44,7 @@ def collect_rss(feeds: list, coverage, since: str = None) -> list:
                 continue
             summary = entry.get("summary", "").strip()
             link = entry.get("link", "")
-            published = entry.get("published", "") or entry.get("updated", "")
-            published_iso = _to_iso(published)
+            published_iso = _to_iso(entry)
             if published_iso and published_iso < since:
                 continue
 
@@ -72,10 +71,10 @@ def _attribute_company(text: str, feed_url: str, coverage):
 
     t = (text or "").upper()
 
-    # 1. Full company name (most specific).
+    # 1. Full company name as a whole phrase.
     for co in coverage.companies:
         name = (co.name or "").upper()
-        if name and name in t:
+        if name and re.search(rf"(?<![A-Z0-9]){re.escape(name)}(?![A-Z0-9])", t):
             return co
 
     # 2. Ticker as a whole word (skip short/ambiguous tickers).
@@ -94,8 +93,19 @@ def _attribute_company(text: str, feed_url: str, coverage):
     return Company(name="Sector", ticker="", role="sector")
 
 
-def _to_iso(published: str) -> str:
-    """Best-effort normalize a feed date to YYYY-MM-DD (or empty on failure)."""
+def _to_iso(entry) -> str:
+    """Normalize a feed entry's date to YYYY-MM-DD (handles RFC-2822 and ISO-8601)."""
+    from datetime import datetime
+
+    for key in ("published_parsed", "updated_parsed"):
+        t = entry.get(key)
+        if t:
+            try:
+                return datetime(*t[:6]).date().isoformat()
+            except Exception:
+                pass
+
+    published = entry.get("published", "") or entry.get("updated", "")
     if not published:
         return ""
     try:

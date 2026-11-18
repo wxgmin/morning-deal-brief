@@ -134,6 +134,7 @@ def collect_filings(companies: list, date_start: str, date_end: Optional[str] = 
         if not cik:
             logger.warning("No CIK for %s (%s); skipping EDGAR", co.ticker, co.name)
             continue
+        cik = cik.zfill(10)
 
         try:
             company = EdgarCompany(cik)
