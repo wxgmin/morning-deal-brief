@@ -2,16 +2,26 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from . import archive, brief, config, dedupe, deliver, llm, rank
 from .collectors import edgar, market, rss
 from .events import classify, detect
 from .models import BriefItem
 
+logger = logging.getLogger(__name__)
 
-def today_iso() -> str:
+
+def today_iso(tz: str = None) -> str:
+    """Today's date in the configured timezone (falls back to local date)."""
+    if tz:
+        try:
+            return datetime.now(ZoneInfo(tz)).date().isoformat()
+        except Exception:
+            pass
     return date.today().isoformat()
 
 
@@ -46,14 +56,25 @@ def run_pipeline(
 ):
     """Run one day's pipeline: collect -> detect -> classify -> dedupe -> rank
     -> judge -> guardrail -> render -> archive -> (optionally) deliver."""
-    date_str = as_of_date or today_iso()
+    date_str = as_of_date or today_iso(cfg.settings.timezone)
 
     if edgar_items is None:
-        edgar_items = edgar.collect_filings(cfg.coverage.companies, date_str, date_str)
+        # A morning run must see filings filed since the previous run, including the
+        # prior business day (and spanning a weekend/holiday).
+        edgar_start = recent_weekdays(date_str, 5)[0]
+        edgar_items = edgar.collect_filings(cfg.coverage.companies, edgar_start, date_str)
+        if not edgar_items:
+            logger.warning("No EDGAR filings collected in window [%s, %s]", edgar_start, date_str)
+
     if price_moves is None:
-        price_moves = market.collect_market(cfg.coverage.companies, as_of_date=as_of_date)
+        price_moves = market.collect_market(cfg.coverage.companies, as_of_date=date_str)
+        if not price_moves:
+            raise RuntimeError("Market data unavailable; aborting (network/coverage?)")
+
     if rss_items is None:
         rss_items = rss.collect_rss(cfg.coverage.rss_feeds, cfg.coverage) if include_news else []
+        if include_news and not rss_items:
+            logger.warning("No RSS items collected")
 
     events = detect.detect_events(edgar_items, rss_items, price_moves)
     events = classify.classify_events(events, cfg)
@@ -61,7 +82,11 @@ def run_pipeline(
     ranked = rank.rank_events(events, cfg)
 
     brief_items: list[BriefItem] = []
-    for ev in ranked[:max_items]:
+    # Collect up to max_items GROUNDED items from the full ranked list (a guardrail
+    # fallback is deterministic and always grounded, so this only stops at the cap).
+    for ev in ranked:
+        if len(brief_items) >= max_items:
+            break
         source_text = ev.source_text or ""
         if ev.item.source == "edgar" and not source_text:
             source_text = edgar.fetch_text(
@@ -70,7 +95,6 @@ def run_pipeline(
 
         judgment = llm.judgment_for_event(cfg, ev, source_text, cfg.coverage)
         if not judgment.grounded:
-            # Dropped by the guardrail: never ship an unsourced figure.
             continue
 
         brief_items.append(
@@ -103,16 +127,16 @@ def _run_backfill(cfg, days: int, end_date: str) -> None:
     dates = recent_weekdays(end_date, days)
     start, end = dates[0], dates[-1]
 
-    # Collect the full window once, then bucket per day.
     edgar_all = edgar.collect_filings(cfg.coverage.companies, start, end)
-    market_series = market.collect_market_series(cfg.coverage.companies, start, end)
+    # Extend the market window so the first brief date still has a prior session.
+    market_start = (date.fromisoformat(start) - timedelta(days=7)).isoformat()
+    market_series = market.collect_market_series(cfg.coverage.companies, market_start, end)
     trading_dates = sorted(market_series.keys())
 
     for d in dates:
         day_edgar = [it for it in edgar_all if it.published == d]
-        # A morning brief shows the latest completed trading day (<= d), so holidays
-        # and the current (not-yet-closed) day still get a populated table.
-        candidates = [t for t in trading_dates if t <= d]
+        # A morning brief shows the latest COMPLETED trading day strictly before d.
+        candidates = [t for t in trading_dates if t < d]
         day_moves = market_series[candidates[-1]] if candidates else []
         run_pipeline(
             cfg,
@@ -133,19 +157,27 @@ def main(argv=None) -> int:
     parser.add_argument("--end-date", default=None, help="Backfill end date (YYYY-MM-DD), default today")
     args = parser.parse_args(argv)
 
-    cfg = config.load_config()
+    if args.backfill is not None and args.backfill < 1:
+        parser.error("--backfill requires a positive integer")
+    if args.end_date and not args.backfill:
+        parser.error("--end-date requires --backfill")
 
-    if args.backfill:
-        _run_backfill(cfg, args.backfill, args.end_date or today_iso())
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+    try:
+        cfg = config.load_config()
+        if args.backfill:
+            _run_backfill(cfg, args.backfill, args.end_date or today_iso(cfg.settings.timezone))
+        elif args.run:
+            if cfg.settings.delivery == "none":
+                logger.warning("--run requested but DELIVERY=none; brief will be archived only")
+            run_pipeline(cfg, include_news=True, send=True)
+        else:
+            run_pipeline(cfg, include_news=True, send=False)
         return 0
-
-    if args.run:
-        run_pipeline(cfg, include_news=True, send=True)
-    else:
-        # default and --dry-run
-        run_pipeline(cfg, include_news=True, send=False)
-
-    return 0
+    except Exception as exc:
+        logger.error("pipeline failed: %s", exc, exc_info=True)
+        return 1
 
 
 if __name__ == "__main__":

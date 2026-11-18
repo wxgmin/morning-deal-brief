@@ -1,18 +1,36 @@
 """Render the one-page brief as Markdown and HTML."""
 from __future__ import annotations
 
-from jinja2 import Environment, select_autoescape
+from urllib.parse import urlsplit
+
+from jinja2 import Environment
 
 
 def _event_label(event_type: str) -> str:
     return event_type.replace("_", " ").title()
 
 
+def _md_cell(value) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _md_inline(value) -> str:
+    return str(value).replace("\n", " ").replace("|", "\\|")
+
+
+def _safe_http_url(url: str) -> str:
+    url = (url or "").strip()
+    try:
+        return url if urlsplit(url).scheme.lower() in ("http", "https") else ""
+    except Exception:
+        return ""
+
+
 def render_markdown(brief_items, price_moves, coverage, date_str: str) -> str:
     lines = [
         f"# Morning Deal Brief — {date_str}",
         "",
-        f"**Sector:** {coverage.sector}",
+        f"**Sector:** {_md_inline(coverage.sector)}",
         "",
         "## What matters today",
         "",
@@ -23,12 +41,12 @@ def render_markdown(brief_items, price_moves, coverage, date_str: str) -> str:
         lines.append("")
     else:
         for b in brief_items:
-            lines.append(f"### {b.rank}. {b.company} ({b.ticker}) — {_event_label(b.event_type)}")
-            lines.append(b.summary)
+            lines.append(f"### {b.rank}. {_md_inline(b.company)} ({_md_inline(b.ticker)}) — {_event_label(b.event_type)}")
+            lines.append(_md_inline(b.summary))
             lines.append("")
-            lines.append(f"> Why it matters for us: {b.why_it_matters}")
+            lines.append(f"> Why it matters for us: {_md_inline(b.why_it_matters)}")
             lines.append("")
-            lines.append(f"Source: {b.source_url}")
+            lines.append(f"Source: {_md_inline(b.source_url) or '(none)'}")
             lines.append("")
 
     lines += [
@@ -40,7 +58,7 @@ def render_markdown(brief_items, price_moves, coverage, date_str: str) -> str:
     for m in price_moves:
         flag = " *" if m.large_move else ""
         lines.append(
-            f"| {m.ticker} | {m.company} | {m.role} | {m.close:.2f} | "
+            f"| {_md_cell(m.ticker)} | {_md_cell(m.company)} | {_md_cell(m.role)} | {m.close:.2f} | "
             f"{m.pct_change:+.2f}% | {m.volume_z:+.1f} | {m.z_score:+.1f}{flag} |"
         )
     if any(m.large_move for m in price_moves):
@@ -77,11 +95,12 @@ _HTML_TEMPLATE = """<!doctype html>
 <h2>What matters today</h2>
 {% if items %}
   {% for b in items %}
+  {% set u = b.source_url|safeurl %}
   <div class="item">
     <h3>{{ b.rank }}. {{ b.company }} ({{ b.ticker }}) — {{ b.event_type.replace('_', ' ').title() }}</h3>
     <p>{{ b.summary }}</p>
     <p class="why"><strong>Why it matters for us:</strong> {{ b.why_it_matters }}</p>
-    <p class="src">Source: <a href="{{ b.source_url }}">{{ b.source_url }}</a></p>
+    <p class="src">Source: {% if u %}<a href="{{ u }}">{{ b.source_url }}</a>{% else %}(none){% endif %}</p>
   </div>
   {% endfor %}
 {% else %}
@@ -111,7 +130,8 @@ _HTML_TEMPLATE = """<!doctype html>
 
 
 def render_html(brief_items, price_moves, coverage, date_str: str) -> str:
-    env = Environment(autoescape=select_autoescape(["html"]))
+    env = Environment(autoescape=True)
+    env.filters["safeurl"] = _safe_http_url
     template = env.from_string(_HTML_TEMPLATE)
     return template.render(
         date_str=date_str,

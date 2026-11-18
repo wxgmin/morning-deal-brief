@@ -4,23 +4,53 @@
 
 ## What matters today
 
-### 1. Graco Inc. (GGG) — Management Change
-Graco Inc. filed 8-K (management_change) on 2026-11-10.
+### 1. Donaldson Company (DCI) — Large Price Move
+DCI moved +4.6% (3.4 sigma) on 2026-11-09.
 
-> Why it matters for us: Management Change at a client is a potential banking angle or read-through for the coverage list.
+> Why it matters for us: A 3.4-sigma move in a peer name is worth flagging to the team this morning.
 
-Source: https://www.sec.gov/Archives/edgar/data/42888/000119312526455736/0001193125-26-455736-index.html
+Source: https://finance.yahoo.com/quote/DCI
+
+### 2. Dover Corporation (DOV) — Large Price Move
+DOV moved +4.5% (3.0 sigma) on 2026-11-09.
+
+> Why it matters for us: A 3.0-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/DOV
+
+### 3. IDEX Corporation (IEX) — Large Price Move
+IEX moved +3.9% (2.8 sigma) on 2026-11-09.
+
+> Why it matters for us: A 2.8-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/IEX
+
+### 4. Nordson Corporation (NDSN) — Large Price Move
+NDSN moved +4.5% (2.5 sigma) on 2026-11-09.
+
+> Why it matters for us: A 2.5-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/NDSN
+
+### 5. Ingersoll Rand (IR) — Large Price Move
+IR moved +4.7% (2.4 sigma) on 2026-11-09.
+
+> Why it matters for us: A 2.4-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/IR
 
 ## Coverage price moves
 
 | Ticker | Company | Role | Close | 1D % | Vol z | σ |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| GGG | Graco Inc. | client | 69.70 | -0.17% | -0.3 | -0.1 |
-| IEX | IDEX Corporation | peer | 236.90 | +0.41% | -1.2 | +0.3 |
-| NDSN | Nordson Corporation | peer | 325.10 | +0.39% | -0.5 | +0.2 |
-| LECO | Lincoln Electric Holdings | peer | 284.42 | -0.01% | -0.9 | -0.0 |
-| SNA | Snap-on Incorporated | peer | 373.28 | -0.14% | -0.7 | -0.2 |
-| DCI | Donaldson Company | peer | 87.35 | -0.97% | -0.3 | -0.7 |
-| DOV | Dover Corporation | peer | 212.00 | -0.46% | -0.3 | -0.3 |
-| IR | Ingersoll Rand | peer | 85.86 | -1.17% | +0.1 | -0.6 |
-| FTV | Fortive Corporation | peer | 67.73 | +0.94% | +0.1 | +0.6 |
+| GGG | Graco Inc. | client | 69.82 | +2.89% | -0.4 | +1.2 |
+| IEX | IDEX Corporation | peer | 235.93 | +3.94% | -0.3 | +2.8 * |
+| NDSN | Nordson Corporation | peer | 323.84 | +4.51% | -0.7 | +2.5 * |
+| LECO | Lincoln Electric Holdings | peer | 284.44 | +3.30% | -0.9 | +1.5 |
+| SNA | Snap-on Incorporated | peer | 373.82 | +1.80% | -0.1 | +1.9 |
+| DCI | Donaldson Company | peer | 88.21 | +4.60% | -0.3 | +3.4 * |
+| DOV | Dover Corporation | peer | 212.98 | +4.48% | +0.5 | +3.0 * |
+| IR | Ingersoll Rand | peer | 86.88 | +4.69% | -0.6 | +2.4 * |
+| FTV | Fortive Corporation | peer | 67.10 | +2.65% | +0.2 | +1.6 |
+
+\* = large move (>2σ vs trailing 60-day distribution)

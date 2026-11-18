@@ -14,6 +14,18 @@ def _richness(ev: Event) -> int:
     return len(ev.source_text or "") + len(ev.item.summary or "")
 
 
+def _same_co(a: Event, b: Event) -> bool:
+    ta = (a.item.ticker or "").upper()
+    tb = (b.item.ticker or "").upper()
+    if ta and tb:
+        return ta == tb
+    if ta or tb:
+        return False
+    na = _norm(a.item.company)
+    nb = _norm(b.item.company)
+    return bool(na and nb and na == nb)
+
+
 def dedupe(events: list, threshold: int = 82) -> list:
     """Greedy single-pass clustering by company + headline similarity.
 
@@ -27,18 +39,25 @@ def dedupe(events: list, threshold: int = 82) -> list:
     for ev in events:
         matched = False
         for k in kept:
-            same_co = (ev.item.ticker and ev.item.ticker == k.item.ticker) or (
-                not ev.item.ticker and not k.item.ticker
-            )
-            if not same_co:
+            # Distinct EDGAR filings (different accessions) are never duplicates.
+            if ev.item.source == "edgar" and k.item.source == "edgar":
+                if ev.item.accession != k.item.accession:
+                    continue
+            if not _same_co(ev, k):
                 continue
+
             ratio = fuzz.token_set_ratio(_norm(ev.item.title), _norm(k.item.title))
             if ratio >= threshold:
                 if ev.item.url and ev.item.url not in k.also_reported_by:
                     k.also_reported_by.append(ev.item.url)
                 if _richness(ev) > _richness(k):
+                    if k.item.url and k.item.url not in k.also_reported_by:
+                        k.also_reported_by.append(k.item.url)
                     k.item = ev.item
                     k.source_text = ev.source_text
+                    k.event_type = ev.event_type
+                    k.confidence = ev.confidence
+                    k.magnitude = ev.magnitude
                 matched = True
                 break
         if not matched:

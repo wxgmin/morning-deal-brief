@@ -1,6 +1,8 @@
 """Load and validate configuration from coverage.yaml and .env."""
 from __future__ import annotations
 
+import logging
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,6 +12,8 @@ import yaml
 from dotenv import load_dotenv
 
 from .models import Company
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COVERAGE_PATH = PROJECT_ROOT / "config" / "coverage.yaml"
@@ -46,7 +50,10 @@ class Settings:
             return False
         if p == "local":
             return True
-        return bool(self.openai_api_key or self.anthropic_api_key or self.gemini_api_key or self.llm_api_key)
+        return bool(
+            self.openai_api_key or self.anthropic_api_key or self.gemini_api_key
+            or self.llm_api_key or self.llm_base_url
+        )
 
 
 @dataclass
@@ -69,10 +76,18 @@ class CoverageConfig:
         return None
 
     def relevance_weight(self, role: str) -> float:
-        return float(self.relevance_weights.get(role, self.relevance_weights.get("sector", 0.5)))
+        return _finite_float(self.relevance_weights.get(role, self.relevance_weights.get("sector", 0.5)), 0.5)
 
     def event_weight(self, event_type: str) -> float:
-        return float(self.event_weights.get(event_type, self.event_weights.get("other", 0.2)))
+        return _finite_float(self.event_weights.get(event_type, self.event_weights.get("other", 0.2)), 0.2)
+
+
+def _finite_float(value, default: float) -> float:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return default
+    return v if math.isfinite(v) else default
 
 
 @dataclass
@@ -81,16 +96,25 @@ class AppConfig:
     coverage: CoverageConfig
 
 
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+
+
 def _load_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env", override=False)
 
-    # Also load an existing Gemini key from the user-scoped config file, if present.
     gemini_env = Path.home() / ".config" / "gemini" / ".env"
     if gemini_env.exists():
         load_dotenv(gemini_env, override=False)
 
     def split_emails(v: str) -> list:
-        return [x.strip() for x in v.split(",") if x.strip()]
+        return [x.strip() for x in (v or "").split(",") if x.strip()]
 
     return Settings(
         llm_provider=os.getenv("LLM_PROVIDER", "auto"),
@@ -103,7 +127,7 @@ def _load_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or None,
         slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL") or None,
         smtp_host=os.getenv("SMTP_HOST") or None,
-        smtp_port=int(os.getenv("SMTP_PORT", "587")),
+        smtp_port=_int_env("SMTP_PORT", 587),
         smtp_user=os.getenv("SMTP_USER") or None,
         smtp_password=os.getenv("SMTP_PASSWORD") or None,
         smtp_from=os.getenv("SMTP_FROM") or None,
@@ -119,32 +143,57 @@ def _load_coverage() -> CoverageConfig:
         raise FileNotFoundError(f"Coverage config not found: {COVERAGE_PATH}")
 
     data = yaml.safe_load(COVERAGE_PATH.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"coverage.yaml must contain a YAML mapping, got {type(data).__name__}")
 
-    client = data.get("client", {})
+    def _req_str(mapping: dict, key: str, where: str) -> str:
+        v = (mapping.get(key) or "").strip()
+        if not v:
+            raise ValueError(f"coverage.yaml: {where}.{key} is required")
+        return v
+
+    client = data.get("client") or {}
+    client_cik = (client.get("cik") or "").strip()
+    if client_cik and not client_cik.isdigit():
+        raise ValueError(f"coverage.yaml: client.cik must be numeric, got {client_cik!r}")
+
     client_company = Company(
-        name=client.get("name", ""),
-        ticker=client.get("ticker", "").upper(),
-        cik=client.get("cik", ""),
+        name=_req_str(client, "name", "client"),
+        ticker=_req_str(client, "ticker", "client").upper(),
+        cik=client_cik,
         role="client",
     )
 
-    peers = [
-        Company(
-            name=p.get("name", ""),
-            ticker=p.get("ticker", "").upper(),
-            cik=p.get("cik", ""),
-            role="peer",
+    peers = []
+    for p in data.get("peers") or []:
+        if not isinstance(p, dict):
+            continue
+        cik = (p.get("cik") or "").strip()
+        if cik and not cik.isdigit():
+            raise ValueError(f"coverage.yaml: peer {p.get('ticker')!r} cik must be numeric")
+        peers.append(
+            Company(
+                name=_req_str(p, "name", "peers"),
+                ticker=_req_str(p, "ticker", "peers").upper(),
+                cik=cik,
+                role="peer",
+            )
         )
-        for p in data.get("peers", [])
-    ]
+
+    if not peers:
+        logger.warning("coverage.yaml: no peers configured")
+
+    sector = data.get("sector") or ""
+    if not sector:
+        logger.warning("coverage.yaml: no sector configured")
 
     return CoverageConfig(
-        sector=data.get("sector", ""),
+        sector=sector,
         client=client_company,
         peers=peers,
-        event_weights=data.get("event_weights", {}),
-        relevance_weights=data.get("relevance_weights", {}),
-        rss_feeds=data.get("rss_feeds", []),
+        event_weights=data.get("event_weights") or {},
+        relevance_weights=data.get("relevance_weights") or {},
+        rss_feeds=data.get("rss_feeds") or [],
     )
 
 

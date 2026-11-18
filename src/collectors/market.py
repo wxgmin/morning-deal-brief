@@ -6,39 +6,67 @@ this environment; the data itself is identical.
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import pandas as pd
 import requests
 
 from ..models import PriceMove
+from ..util import retry
+
+logger = logging.getLogger(__name__)
 
 _CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
 _REQUEST_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
 def _download(co_ticker: str, start: str, end: str) -> pd.DataFrame:
-    """Return daily Close/Volume as a DataFrame with a DatetimeIndex."""
+    """Return daily Close/Volume as a DataFrame with a midnight-normalized DatetimeIndex."""
     p1 = int(pd.Timestamp(start).timestamp())
     p2 = int(pd.Timestamp(end).timestamp())
-    resp = requests.get(
-        _CHART_URL.format(ticker=co_ticker),
-        params={"period1": p1, "period2": p2, "interval": "1d"},
-        headers=_REQUEST_HEADERS,
-        timeout=30,
-    )
-    resp.raise_for_status()
-    result = resp.json()["chart"]["result"][0]
-    timestamps = result.get("timestamp", [])
-    quote = result["indicators"]["quote"][0]
-    idx = pd.to_datetime(timestamps, unit="s")
-    df = pd.DataFrame({"Close": quote.get("close"), "Volume": quote.get("volume")}, index=idx)
-    return df.dropna(subset=["Close"])
+
+    def _fetch():
+        resp = requests.get(
+            _CHART_URL.format(ticker=co_ticker),
+            params={"period1": p1, "period2": p2, "interval": "1d"},
+            headers=_REQUEST_HEADERS,
+            timeout=30,
+        )
+        if resp.status_code in (400, 404):
+            return None  # invalid/delisted ticker — skip, not a transient error
+        resp.raise_for_status()
+        return resp.json()
+
+    data = retry(_fetch, attempts=3, logger=logger)
+    if not data:
+        return pd.DataFrame()
+
+    result = (data.get("chart") or {}).get("result") or []
+    if not result:
+        return pd.DataFrame()
+
+    r = result[0]
+    timestamps = r.get("timestamp") or []
+    quote = (r.get("indicators") or {}).get("quote") or []
+    q = quote[0] if quote else {}
+    closes = q.get("close") or []
+    volumes = q.get("volume") or []
+
+    n = min(len(timestamps), len(closes), len(volumes))
+    if n == 0:
+        return pd.DataFrame()
+
+    idx = pd.to_datetime(timestamps[:n], unit="s").normalize()
+    df = pd.DataFrame({"Close": closes[:n], "Volume": volumes[:n]}, index=idx)
+    df = df.dropna(subset=["Close", "Volume"])
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    return df
 
 
 def _make_move(co, row, ret: float, std: float, vol_mean: float, vol_std: float) -> PriceMove:
     z = (ret / std) if std else 0.0
-    last_vol = float(row["Volume"])
+    last_vol = float(row["Volume"]) if pd.notna(row["Volume"]) else 0.0
     vol_z = ((last_vol - vol_mean) / vol_std) if vol_std else 0.0
     idx = row.name
     date_str = idx.date().isoformat() if hasattr(idx, "date") else str(idx)[:10]
@@ -57,25 +85,21 @@ def _make_move(co, row, ret: float, std: float, vol_mean: float, vol_std: float)
 
 
 def collect_market_series(companies: list, start_date: str, end_date: str, lookback_days: int = 90) -> dict:
-    """Return {date_str: [PriceMove, ...]} for trading days in [start_date, end_date].
-
-    One download per company covers the window plus the lookback used to compute a
-    trailing 60-day std, so backfilling many days is cheap.
-    """
+    """Return {date_str: [PriceMove, ...]} for trading days in [start_date, end_date]."""
     series: dict = {}
-    start = pd.Timestamp(start_date)
-    end = pd.Timestamp(end_date)
+    start = pd.Timestamp(start_date).normalize()
+    end = pd.Timestamp(end_date).normalize()
     dl_start = (start - pd.Timedelta(days=lookback_days + 1)).strftime("%Y-%m-%d")
     dl_end = (end + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     for co in companies:
         try:
             hist = _download(co.ticker, dl_start, dl_end)
-            if hist is None or hist.empty:
+            if hist.empty:
                 continue
 
             returns = hist["Close"].pct_change()
-            rolling_std = returns.rolling(60).std()
+            rolling_std = returns.rolling(60).std(ddof=0)
             vol_mean = hist["Volume"].rolling(60).mean()
             vol_std = hist["Volume"].rolling(60).std(ddof=0)
 
@@ -89,16 +113,17 @@ def collect_market_series(companies: list, start_date: str, end_date: str, lookb
                     co, row, float(ret), float(std), float(vol_mean.loc[idx]), float(vol_std.loc[idx])
                 )
                 series.setdefault(move.date, []).append(move)
-        except Exception:
-            continue
+        except Exception as exc:
+            logger.warning("market data failed for %s: %s", co.ticker, exc)
 
     return series
 
 
 def collect_market(companies: list, as_of_date: Optional[str] = None, lookback_days: int = 90) -> list:
-    """Return the latest available day's PriceMove list (default: today)."""
+    """Return the latest completed trading day's PriceMove list (default: today)."""
     end = pd.Timestamp(as_of_date) if as_of_date else pd.Timestamp.today()
-    start = (end - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    # Widen so Mondays and post-holiday mornings still find the prior session.
+    start = (end - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
     series = collect_market_series(companies, start, end.strftime("%Y-%m-%d"), lookback_days)
     if not series:
         return []

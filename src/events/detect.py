@@ -1,6 +1,8 @@
 """Rule-based event detection: turn collected items into tagged Events."""
 from __future__ import annotations
 
+import re
+
 from ..collectors import edgar as edgar_c
 from ..collectors.market import market_stats_text
 from ..models import Event, RawItem, PriceMove
@@ -31,7 +33,8 @@ KEYWORD_EVENTS = {
         "executive", "succession", "named new",
     ],
     "rating_change": [
-        "credit rating", "moody", "s&p", "standard & poor", "fitch", "rating", "downgrade", "upgrade",
+        "credit rating", "rating downgrade", "rating upgrade", "moody", "s&p", "standard & poor",
+        "fitch", "downgrade", "upgrade",
     ],
     "activist": [
         "13d", "13g", "activist", "beneficial ownership", "stake", "nominate", "board seat",
@@ -39,12 +42,20 @@ KEYWORD_EVENTS = {
 }
 
 
+def _hit(text: str, keyword: str) -> bool:
+    """Match whole tokens; multi-word keywords match as exact phrases."""
+    if " " in keyword:
+        return keyword in text
+    return re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", text) is not None
+
+
 def keyword_classify(text: str, default: str = "other") -> str:
     t = (text or "").lower()
     best = default
     best_score = 0
     for event, keywords in KEYWORD_EVENTS.items():
-        score = sum(1 for k in keywords if k in t)
+        # Multi-word phrases are more specific and get extra weight.
+        score = sum(2 if " " in k else 1 for k in keywords if _hit(t, k))
         if score > best_score:
             best = event
             best_score = score
@@ -56,12 +67,11 @@ def _detect_edgar(item: RawItem) -> Event:
     event_type = edgar_c.FORM_EVENT_MAP.get(form)
     text = ""
     if form == "8-K":
-        # Peek at the 8-K item headers to classify the underlying event.
         text = edgar_c.fetch_text(
-            item.extra.get("cik", ""), item.accession or "", item.published, max_chars=1500
+            item.extra.get("cik", ""), item.accession or "", item.published, max_chars=2000
         )
         item.extra["text"] = text
-        event_type = keyword_classify(text, default="other")
+        event_type = keyword_classify(text, default="other") if text else "other"
     elif event_type is None:
         event_type = "other"
 
@@ -93,7 +103,7 @@ def _detect_market(move: PriceMove):
     return Event(
         item=item,
         event_type="large_price_move",
-        confidence=1.0,
+        confidence=0.8,
         magnitude=abs(move.z_score),
         source_text=text,
     )

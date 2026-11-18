@@ -10,12 +10,12 @@ _No coverage-relevant events met the threshold this morning._
 
 | Ticker | Company | Role | Close | 1D % | Vol z | σ |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| GGG | Graco Inc. | client | 71.04 | -0.59% | +0.1 | -0.2 |
-| IEX | IDEX Corporation | peer | 232.59 | -0.42% | -0.3 | -0.3 |
-| NDSN | Nordson Corporation | peer | 319.71 | -0.88% | +0.2 | -0.6 |
-| LECO | Lincoln Electric Holdings | peer | 270.81 | -1.93% | -0.4 | -0.9 |
-| SNA | Snap-on Incorporated | peer | 360.83 | -1.14% | -0.3 | -1.2 |
-| DCI | Donaldson Company | peer | 84.55 | -0.76% | +0.9 | -0.6 |
-| DOV | Dover Corporation | peer | 203.02 | -1.50% | -0.5 | -1.0 |
-| IR | Ingersoll Rand | peer | 82.07 | -1.63% | +0.2 | -0.8 |
-| FTV | Fortive Corporation | peer | 66.07 | -2.16% | +0.0 | -1.4 |
+| GGG | Graco Inc. | client | 71.46 | -1.33% | +0.1 | -0.6 |
+| IEX | IDEX Corporation | peer | 233.57 | -1.71% | -0.6 | -1.2 |
+| NDSN | Nordson Corporation | peer | 322.56 | -0.67% | -1.0 | -0.4 |
+| LECO | Lincoln Electric Holdings | peer | 276.14 | -2.38% | -0.8 | -1.1 |
+| SNA | Snap-on Incorporated | peer | 364.99 | -0.98% | +0.5 | -1.0 |
+| DCI | Donaldson Company | peer | 85.20 | -1.73% | +0.1 | -1.3 |
+| DOV | Dover Corporation | peer | 206.12 | -1.82% | -0.2 | -1.2 |
+| IR | Ingersoll Rand | peer | 83.43 | -1.92% | -1.0 | -1.0 |
+| FTV | Fortive Corporation | peer | 67.53 | -0.57% | -0.3 | -0.4 |

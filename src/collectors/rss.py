@@ -1,28 +1,41 @@
 """Press-release and news RSS collection via feedparser."""
 from __future__ import annotations
 
+import logging
 import re
+from datetime import date, timedelta
 
 import feedparser
+import requests
 
 from ..models import RawItem, SOURCE_RSS
 
+logger = logging.getLogger(__name__)
 
-def collect_rss(feeds: list, coverage) -> list:
+_USER_AGENT = "MorningDealBrief/1.0"
+
+
+def collect_rss(feeds: list, coverage, since: str = None) -> list:
     """Collect and normalize RSS entries from the configured feeds.
 
-    Each feed is expected to be a dict with at least a "url". Entries are
-    attributed to a coverage company by matching ticker/name in the headline or
-    feed URL, else tagged as sector-level news.
+    Entries are attributed to the coverage company actually named in the headline,
+    else tagged as sector-level news. A ``since`` date (YYYY-MM-DD) optionally drops
+    older entries; the default keeps the last 7 days.
     """
+    if since is None:
+        since = (date.today() - timedelta(days=7)).isoformat()
+
     items: list[RawItem] = []
     for feed in feeds:
         url = feed.get("url", "")
         if not url:
             continue
         try:
-            parsed = feedparser.parse(url)
-        except Exception:
+            resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=15)
+            resp.raise_for_status()
+            parsed = feedparser.parse(resp.content)
+        except Exception as exc:
+            logger.warning("RSS feed failed (%s): %s", url, exc)
             continue
 
         for entry in parsed.entries:
@@ -33,6 +46,8 @@ def collect_rss(feeds: list, coverage) -> list:
             link = entry.get("link", "")
             published = entry.get("published", "") or entry.get("updated", "")
             published_iso = _to_iso(published)
+            if published_iso and published_iso < since:
+                continue
 
             company = _attribute_company(title, url, coverage)
             items.append(
@@ -52,34 +67,35 @@ def collect_rss(feeds: list, coverage) -> list:
 
 
 def _attribute_company(text: str, feed_url: str, coverage):
-    """Attribute an RSS item to the coverage company actually named in the headline.
-
-    Falls back to the feed's own ticker only when the headline names it; otherwise
-    the item is sector-level news. This avoids mis-attributing a peer/third-party
-    headline to the client just because it arrived via the client's feed.
-    """
+    """Attribute an RSS item to the coverage company actually named in the headline."""
     from ..models import Company
 
     t = (text or "").upper()
-    # 1. Ticker as a whole word.
+
+    # 1. Full company name (most specific).
     for co in coverage.companies:
-        ticker = co.ticker.upper()
-        if ticker and re.search(rf"\b{re.escape(ticker)}\b", t):
+        name = (co.name or "").upper()
+        if name and name in t:
             return co
-    # 2. Full company name.
+
+    # 2. Ticker as a whole word (skip short/ambiguous tickers).
     for co in coverage.companies:
-        if co.name.upper() in t:
+        ticker = (co.ticker or "").upper()
+        if len(ticker) >= 3 and ticker and re.search(rf"\b{re.escape(ticker)}\b", t):
             return co
-    # 3. Short name (first token of the company name) as a whole word.
+
+    # 3. Short name (first token) as a whole word.
     for co in coverage.companies:
-        short = co.name.strip().split()[0].upper()
-        if short and re.search(rf"\b{re.escape(short)}\b", t):
+        parts = (co.name or "").strip().split()
+        short = parts[0].upper() if parts else ""
+        if len(short) >= 3 and re.search(rf"\b{re.escape(short)}\b", t):
             return co
+
     return Company(name="Sector", ticker="", role="sector")
 
 
 def _to_iso(published: str) -> str:
-    """Best-effort normalize a feed date to YYYY-MM-DD."""
+    """Best-effort normalize a feed date to YYYY-MM-DD (or empty on failure)."""
     if not published:
         return ""
     try:
@@ -87,4 +103,4 @@ def _to_iso(published: str) -> str:
 
         return parsedate_to_datetime(published).date().isoformat()
     except Exception:
-        return published[:10]
+        return ""

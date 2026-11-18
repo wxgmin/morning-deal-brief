@@ -4,25 +4,18 @@
 
 ## What matters today
 
-### 1. Snap-on Incorporated (SNA) — Large Price Move
-SNA moved +1.8% (2.0 sigma) on 2026-11-04.
-
-> Why it matters for us: A 2.0-sigma move in a peer name is worth flagging to the team this morning.
-
-Source: https://finance.yahoo.com/quote/SNA
+_No coverage-relevant events met the threshold this morning._
 
 ## Coverage price moves
 
 | Ticker | Company | Role | Close | 1D % | Vol z | σ |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| GGG | Graco Inc. | client | 69.78 | +0.90% | -0.1 | +0.4 |
-| IEX | IDEX Corporation | peer | 233.69 | -1.55% | +2.0 | -1.3 |
-| NDSN | Nordson Corporation | peer | 330.70 | -0.11% | +0.1 | -0.1 |
-| LECO | Lincoln Electric Holdings | peer | 279.33 | -1.83% | -0.3 | -0.8 |
-| SNA | Snap-on Incorporated | peer | 368.70 | +1.84% | +2.1 | +2.0 * |
-| DCI | Donaldson Company | peer | 85.52 | -0.44% | +0.4 | -0.4 |
-| DOV | Dover Corporation | peer | 212.66 | -0.43% | +0.3 | -0.3 |
-| IR | Ingersoll Rand | peer | 84.18 | -0.45% | -0.1 | -0.2 |
-| FTV | Fortive Corporation | peer | 68.34 | +2.29% | +2.8 | +1.5 |
-
-\* = large move (>2σ vs trailing 60-day distribution)
+| GGG | Graco Inc. | client | 69.16 | +0.23% | -0.1 | +0.1 |
+| IEX | IDEX Corporation | peer | 237.36 | +0.36% | +0.9 | +0.3 |
+| NDSN | Nordson Corporation | peer | 331.06 | +1.06% | +0.0 | +0.7 |
+| LECO | Lincoln Electric Holdings | peer | 284.55 | -0.33% | -0.3 | -0.2 |
+| SNA | Snap-on Incorporated | peer | 362.04 | -0.83% | +0.0 | -1.0 |
+| DCI | Donaldson Company | peer | 85.90 | +0.67% | +0.7 | +0.6 |
+| DOV | Dover Corporation | peer | 213.57 | -1.08% | +0.5 | -0.9 |
+| IR | Ingersoll Rand | peer | 84.56 | +2.21% | +1.0 | +1.2 |
+| FTV | Fortive Corporation | peer | 66.81 | -0.04% | +1.1 | -0.0 |

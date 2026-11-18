@@ -11,6 +11,10 @@ matching key). ``auto`` (default) detects from whichever key is present.
 from __future__ import annotations
 
 import json
+import logging
+import re
+
+logger = logging.getLogger(__name__)
 
 GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
@@ -26,20 +30,29 @@ DEFAULT_MODELS = {
     "local": (None, None),
 }
 
+_FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
+
 
 def _extract_json(text: str) -> dict:
+    """Return a dict from an LLM response, tolerating fences/arrays. Raises if invalid."""
     text = (text or "").strip()
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
+    candidates = [text]
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
+        candidates.append(text[start : end + 1])
+
+    for cand in candidates:
+        cand = _FENCE_RE.sub("", cand.strip()).strip()
         try:
-            return json.loads(text[start : end + 1])
+            obj = json.loads(cand)
         except Exception:
-            pass
-    return {}
+            continue
+        if isinstance(obj, dict):
+            return obj
+        if isinstance(obj, list) and obj and isinstance(obj[0], dict):
+            return obj[0]
+
+    raise ValueError("LLM did not return a valid JSON object")
 
 
 class NoneProvider:
@@ -54,14 +67,12 @@ class OpenAICompatProvider:
 
     def __init__(self, name, api_key, base_url=None):
         self.name = name
-        self._api_key = api_key
-        self._base_url = base_url
-
-    def chat_json(self, system, user, model):
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
-        resp = client.chat.completions.create(
+        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=120.0, max_retries=2)
+
+    def chat_json(self, system, user, model):
+        resp = self._client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": system},
@@ -75,18 +86,19 @@ class OpenAICompatProvider:
 class AnthropicProvider:
     def __init__(self, api_key):
         self.name = "anthropic"
-        self._api_key = api_key
-
-    def chat_json(self, system, user, model):
         from anthropic import Anthropic
 
-        client = Anthropic(api_key=self._api_key)
-        resp = client.messages.create(
+        self._client = Anthropic(api_key=api_key, timeout=120.0, max_retries=2)
+
+    def chat_json(self, system, user, model):
+        resp = self._client.messages.create(
             model=model,
-            max_tokens=1200,
+            max_tokens=4096,
             system=system + "\n\nRespond with a single JSON object and nothing else.",
             messages=[{"role": "user", "content": user}],
         )
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            raise RuntimeError("Anthropic response truncated by max_tokens")
         text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
         return _extract_json(text)
 
@@ -97,6 +109,10 @@ def _auto_detect(s) -> str:
     if s.gemini_api_key:
         return "gemini"
     if s.openai_api_key:
+        return "openai"
+    if s.llm_base_url:
+        return "local"
+    if s.llm_api_key:
         return "openai"
     return "none"
 
@@ -121,11 +137,13 @@ def get_provider(cfg):
         key = s.gemini_api_key or generic_key
         return OpenAICompatProvider("gemini", key, base_url=GEMINI_OPENAI_BASE) if key else NoneProvider()
     if p == "openrouter":
-        return OpenAICompatProvider("openrouter", generic_key, base_url=OPENROUTER_BASE) if generic_key else NoneProvider()
-    if p == "local":
-        base = s.llm_base_url or OLLAMA_BASE
-        return OpenAICompatProvider("local", "local", base_url=base)
+        key = generic_key or s.openai_api_key
+        return OpenAICompatProvider("openrouter", key, base_url=OPENROUTER_BASE) if key else NoneProvider()
+    if p in ("local", "lmstudio"):
+        base = s.llm_base_url or (LMSTUDIO_BASE if p == "lmstudio" else OLLAMA_BASE)
+        return OpenAICompatProvider(p, "local", base_url=base)
 
+    logger.warning("Unknown LLM_PROVIDER %r; using no-LLM fallback", p)
     return NoneProvider()
 
 

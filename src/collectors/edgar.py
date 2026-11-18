@@ -2,13 +2,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
 import requests
 
 from ..models import RawItem, SOURCE_EDGAR
+from ..util import retry
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_FORMS = {"8-K", "10-Q", "10-K", "S-4", "SC 13D", "SC 13G", "DEF 14A", "425", "DEFM14A", "DEFA14A"}
 FORM_EVENT_MAP = {
@@ -20,14 +26,18 @@ FORM_EVENT_MAP = {
     "10-K": "earnings",
     "DEF 14A": "management_change",
     "DEFM14A": "M&A",
+    "DEFA14A": "M&A",
 }
 
 _SEC_URL = "https://www.sec.gov/files/company_tickers.json"
 _CACHE_DIR = Path(__file__).resolve().parent.parent.parent / ".cache"
 _CACHE_DIR.mkdir(exist_ok=True)
 _TICKERS_CACHE = _CACHE_DIR / "company_tickers.json"
+_TICKERS_TTL = 86400  # refresh the ticker map once a day
 
-_HEADERS = {"User-Agent": "MorningDealBrief/1.0 (coverage research; contact: local@example.com)"}
+
+def _identity() -> str:
+    return os.getenv("EDGAR_IDENTITY", "MorningDealBrief research local@example.com")
 
 
 def _ensure_identity() -> None:
@@ -35,22 +45,37 @@ def _ensure_identity() -> None:
     try:
         from edgar import set_identity
 
-        set_identity(os.getenv("EDGAR_IDENTITY", "MorningDealBrief research local@example.com"))
+        set_identity(_identity())
     except Exception:
         pass
+
+
+def _atomic_write_json(path: Path, data: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _load_ticker_map() -> dict:
     if _TICKERS_CACHE.exists():
         try:
-            return json.loads(_TICKERS_CACHE.read_text(encoding="utf-8"))
+            if time.time() - _TICKERS_CACHE.stat().st_mtime < _TICKERS_TTL:
+                return json.loads(_TICKERS_CACHE.read_text(encoding="utf-8"))
         except Exception:
             pass
 
-    resp = requests.get(_SEC_URL, headers=_HEADERS, timeout=30)
+    resp = requests.get(_SEC_URL, headers={"User-Agent": _identity()}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    _TICKERS_CACHE.write_text(json.dumps(data), encoding="utf-8")
+    _atomic_write_json(_TICKERS_CACHE, data)
     return data
 
 
@@ -59,11 +84,13 @@ def resolve_cik(ticker: str) -> str:
     ticker = ticker.upper().strip()
     try:
         data = _load_ticker_map()
-    except Exception:
+    except Exception as exc:
+        logger.warning("SEC ticker map unavailable: %s", exc)
         return ""
     for record in data.values():
         if record.get("ticker", "").upper() == ticker:
             return str(record.get("cik_str", "")).zfill(10)
+    logger.warning("No CIK found for ticker %s", ticker)
     return ""
 
 
@@ -83,16 +110,12 @@ def _filing_url(filing, cik: str, accession: str) -> str:
     if url:
         return url
     if accession:
-        return f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}/index.json"
+        return f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}/index.json"
     return f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}&type=&dateb=&owner=include&count=40"
 
 
 def collect_filings(companies: list, date_start: str, date_end: Optional[str] = None) -> list:
-    """Collect allowed-form filings for each company within [date_start, date_end].
-
-    date_start and date_end are YYYY-MM-DD. If date_end is None, the window is
-    date_start only. Returns RawItem list (metadata only; text is fetched lazily).
-    """
+    """Collect allowed-form filings for each company within [date_start, date_end]."""
     items: list[RawItem] = []
     date_spec = date_start if date_end is None else f"{date_start}:{date_end}"
 
@@ -104,36 +127,45 @@ def collect_filings(companies: list, date_start: str, date_end: Optional[str] = 
     _ensure_identity()
 
     for co in companies:
-        cik = co.cik.strip() if co.cik else resolve_cik(co.ticker)
+        cik = (co.cik or "").strip() if co.cik else resolve_cik(co.ticker)
+        if cik and not cik.isdigit():
+            logger.warning("Invalid non-numeric CIK for %s (%s): %r; skipping", co.ticker, co.name, cik)
+            cik = ""
         if not cik:
+            logger.warning("No CIK for %s (%s); skipping EDGAR", co.ticker, co.name)
             continue
+
         try:
             company = EdgarCompany(cik)
-            filings = company.get_filings(date=date_spec)
-        except Exception:
+            filings = retry(lambda: company.get_filings(date=date_spec), attempts=3, logger=logger)
+        except Exception as exc:
+            logger.warning("EDGAR fetch failed for %s (%s): %s", co.ticker, co.name, exc)
             continue
 
         for f in filings:
-            form = str(_filing_attr(f, "form", "") or "").upper()
-            if form not in ALLOWED_FORMS:
-                continue
-            accession = str(_filing_attr(f, "accession_no", "") or "")
-            filing_date = str(_filing_attr(f, "filing_date", "") or date_start)
-            url = _filing_url(f, cik, accession)
-            items.append(
-                RawItem(
-                    source=SOURCE_EDGAR,
-                    company=co.name,
-                    ticker=co.ticker,
-                    role=co.role,
-                    title=f"{co.name} ({co.ticker}) filed {form}",
-                    url=url,
-                    published=filing_date[:10],
-                    form=form,
-                    accession=accession,
-                    extra={"cik": cik},
+            try:
+                form = str(_filing_attr(f, "form", "") or "").upper()
+                if form not in ALLOWED_FORMS:
+                    continue
+                accession = str(_filing_attr(f, "accession_no", "") or "")
+                filing_date = str(_filing_attr(f, "filing_date", "") or date_start)
+                url = _filing_url(f, cik, accession)
+                items.append(
+                    RawItem(
+                        source=SOURCE_EDGAR,
+                        company=co.name,
+                        ticker=co.ticker,
+                        role=co.role,
+                        title=f"{co.name} ({co.ticker}) filed {form}",
+                        url=url,
+                        published=filing_date[:10],
+                        form=form,
+                        accession=accession,
+                        extra={"cik": cik},
+                    )
                 )
-            )
+            except Exception as exc:
+                logger.warning("EDGAR filing parse failed for %s: %s", co.ticker, exc)
     return items
 
 
@@ -151,6 +183,7 @@ def fetch_text(cik: str, accession: str, date: str, max_chars: int = 3000) -> st
             if str(_filing_attr(f, "accession_no", "") or "") == accession:
                 text = f.text() or ""
                 return (text or "")[:max_chars]
-    except Exception:
+    except Exception as exc:
+        logger.warning("EDGAR text fetch failed for %s %s: %s", cik, accession, exc)
         return ""
     return ""

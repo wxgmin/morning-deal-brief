@@ -4,18 +4,39 @@
 
 ## What matters today
 
-_No coverage-relevant events met the threshold this morning._
+### 1. Dover Corporation (DOV) — Large Price Move
+DOV moved +3.9% (3.2 sigma) on 2026-11-02.
+
+> Why it matters for us: A 3.2-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/DOV
+
+### 2. Snap-on Incorporated (SNA) — Large Price Move
+SNA moved +2.6% (3.0 sigma) on 2026-11-02.
+
+> Why it matters for us: A 3.0-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/SNA
+
+### 3. Donaldson Company (DCI) — Large Price Move
+DCI moved +2.9% (2.5 sigma) on 2026-11-02.
+
+> Why it matters for us: A 2.5-sigma move in a peer name is worth flagging to the team this morning.
+
+Source: https://finance.yahoo.com/quote/DCI
 
 ## Coverage price moves
 
 | Ticker | Company | Role | Close | 1D % | Vol z | σ |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| GGG | Graco Inc. | client | 69.16 | +0.23% | -0.1 | +0.1 |
-| IEX | IDEX Corporation | peer | 237.36 | +0.36% | +0.9 | +0.3 |
-| NDSN | Nordson Corporation | peer | 331.06 | +1.06% | +0.0 | +0.7 |
-| LECO | Lincoln Electric Holdings | peer | 284.55 | -0.33% | -0.3 | -0.2 |
-| SNA | Snap-on Incorporated | peer | 362.04 | -0.83% | +0.0 | -0.9 |
-| DCI | Donaldson Company | peer | 85.90 | +0.67% | +0.7 | +0.6 |
-| DOV | Dover Corporation | peer | 213.57 | -1.08% | +0.5 | -0.9 |
-| IR | Ingersoll Rand | peer | 84.56 | +2.21% | +1.0 | +1.2 |
-| FTV | Fortive Corporation | peer | 66.81 | -0.04% | +1.1 | -0.0 |
+| GGG | Graco Inc. | client | 69.00 | +2.31% | -0.1 | +1.0 |
+| IEX | IDEX Corporation | peer | 236.52 | +1.15% | +0.7 | +1.0 |
+| NDSN | Nordson Corporation | peer | 327.58 | +1.52% | -0.4 | +1.0 |
+| LECO | Lincoln Electric Holdings | peer | 285.50 | +3.10% | -0.8 | +1.4 |
+| SNA | Snap-on Incorporated | peer | 365.07 | +2.65% | +0.6 | +3.0 * |
+| DCI | Donaldson Company | peer | 85.33 | +2.86% | +0.5 | +2.5 * |
+| DOV | Dover Corporation | peer | 215.91 | +3.93% | +1.8 | +3.2 * |
+| IR | Ingersoll Rand | peer | 82.73 | +3.35% | +0.7 | +1.9 |
+| FTV | Fortive Corporation | peer | 66.84 | +2.47% | +1.5 | +1.7 |
+
+\* = large move (>2σ vs trailing 60-day distribution)

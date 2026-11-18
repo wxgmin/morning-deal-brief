@@ -5,6 +5,7 @@ anthropic>=0.40
 requests>=2.31
 PyYAML>=6.0
 python-dotenv>=1.0
+tzdata>=2024.1
 rapidfuzz>=3.9
 Jinja2>=3.1
 pandas>=2.0
