@@ -1,0 +1,77 @@
+# Morning Deal Brief — coverage list.
+# Edit this file to change the client, peers, sector, feeds, and event weights.
+# CIK is optional: if blank, it is resolved from the SEC company_tickers.json map
+# at run time using the ticker.
+
+sector: "Industrial / Fluid Handling & Flow Control"
+
+client:
+  name: "Graco Inc."
+  ticker: "GGG"
+  cik: ""
+
+peers:
+  - name: "IDEX Corporation"
+    ticker: "IEX"
+    cik: ""
+  - name: "Nordson Corporation"
+    ticker: "NDSN"
+    cik: ""
+  - name: "Lincoln Electric Holdings"
+    ticker: "LECO"
+    cik: ""
+  - name: "Snap-on Incorporated"
+    ticker: "SNA"
+    cik: ""
+  - name: "Donaldson Company"
+    ticker: "DCI"
+    cik: ""
+  - name: "Dover Corporation"
+    ticker: "DOV"
+    cik: ""
+  - name: "Ingersoll Rand"
+    ticker: "IR"
+    cik: ""
+  - name: "Fortive Corporation"
+    ticker: "FTV"
+    cik: ""
+
+# Event-type weights for the banking angle (higher = more relevant to coverage).
+event_weights:
+  M&A: 1.0
+  activist: 0.95
+  rating_change: 0.9
+  financing: 0.85
+  management_change: 0.8
+  guidance_change: 0.75
+  earnings: 0.7
+  large_price_move: 0.65
+  other: 0.2
+
+# Relevance weight by relationship to the coverage list.
+relevance_weights:
+  client: 1.0
+  peer: 0.8
+  sector: 0.5
+
+# News / press-release RSS feeds (live enrichment; RSS is not backfillable).
+# Add a per-ticker Yahoo Finance feed and any company press feeds here.
+rss_feeds:
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GGG&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=IEX&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=NDSN&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=LECO&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=SNA&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=DCI&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=DOV&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=IR&region=US&lang=en-US"
+    type: news
+  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=FTV&region=US&lang=en-US"
+    type: news

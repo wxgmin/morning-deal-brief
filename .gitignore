@@ -1,0 +1,13 @@
+# Secrets — never commit
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Local caches / scratch
+.cache/
+*.log

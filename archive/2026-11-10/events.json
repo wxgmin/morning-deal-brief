@@ -1,0 +1,126 @@
+{
+  "date": "2026-11-10",
+  "items": [
+    {
+      "rank": 1,
+      "ticker": "GGG",
+      "company": "Graco Inc.",
+      "event_type": "management_change",
+      "summary": "Graco Inc. filed 8-K (management_change) on 2026-11-10.",
+      "why_it_matters": "Management Change at a client is a potential banking angle or read-through for the coverage list.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/42888/000119312526455736/0001193125-26-455736-index.html",
+      "figures": [],
+      "confidence": 0.5
+    }
+  ],
+  "price_moves": [
+    {
+      "ticker": "GGG",
+      "company": "Graco Inc.",
+      "role": "client",
+      "date": "2026-11-10",
+      "close": 69.69999694824219,
+      "pct_change": -0.17187445876045704,
+      "volume": 1397900.0,
+      "volume_z": -0.27844809091329203,
+      "z_score": -0.07309543540127539,
+      "large_move": false
+    },
+    {
+      "ticker": "IEX",
+      "company": "IDEX Corporation",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 236.89999389648438,
+      "pct_change": 0.4111394272944935,
+      "volume": 397100.0,
+      "volume_z": -1.1796530102379523,
+      "z_score": 0.28649851896778883,
+      "large_move": false
+    },
+    {
+      "ticker": "NDSN",
+      "company": "Nordson Corporation",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 325.1000061035156,
+      "pct_change": 0.3890840476388657,
+      "volume": 300800.0,
+      "volume_z": -0.5378849893338215,
+      "z_score": 0.209849811307008,
+      "large_move": false
+    },
+    {
+      "ticker": "LECO",
+      "company": "Lincoln Electric Holdings",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 284.4200134277344,
+      "pct_change": -0.0070274973633432936,
+      "volume": 254600.0,
+      "volume_z": -0.8847175157281473,
+      "z_score": -0.003134512178693586,
+      "large_move": false
+    },
+    {
+      "ticker": "SNA",
+      "company": "Snap-on Incorporated",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 373.2799987792969,
+      "pct_change": -0.14445683332661163,
+      "volume": 220700.0,
+      "volume_z": -0.650068113215503,
+      "z_score": -0.15374007027443146,
+      "large_move": false
+    },
+    {
+      "ticker": "DCI",
+      "company": "Donaldson Company",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 87.3499984741211,
+      "pct_change": -0.9749468532790684,
+      "volume": 572200.0,
+      "volume_z": -0.25901096199400764,
+      "z_score": -0.7188572213363911,
+      "large_move": false
+    },
+    {
+      "ticker": "DOV",
+      "company": "Dover Corporation",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 212.0,
+      "pct_change": -0.4601351052672342,
+      "volume": 1140500.0,
+      "volume_z": -0.3193097688100181,
+      "z_score": -0.30449853697113455,
+      "large_move": false
+    },
+    {
+      "ticker": "IR",
+      "company": "Ingersoll Rand",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 85.86000061035156,
+      "pct_change": -1.1740293224126175,
+      "volume": 4563400.0,
+      "volume_z": 0.08494864360984619,
+      "z_score": -0.5989070895248636,
+      "large_move": false
+    },
+    {
+      "ticker": "FTV",
+      "company": "Fortive Corporation",
+      "role": "peer",
+      "date": "2026-11-10",
+      "close": 67.7300033569336,
+      "pct_change": 0.9389044666751722,
+      "volume": 2689800.0,
+      "volume_z": 0.12138456682581608,
+      "z_score": 0.5841023834901155,
+      "large_move": false
+    }
+  ]
+}
