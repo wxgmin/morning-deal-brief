@@ -1,11 +1,9 @@
-"""OpenAI wrapper for classification and grounded judgment, plus a deterministic
-fallback that keeps the pipeline runnable (and always grounded) without a key."""
+"""High-level LLM tasks: classification, grounded judgment, and the no-LLM fallback."""
 from __future__ import annotations
 
-import json
-
-from .guardrails import verify_grounding
-from .models import Event, Judgment
+from ..guardrails import verify_grounding
+from ..models import Event, Judgment
+from .providers import NoneProvider, get_provider, models_for
 
 TAXONOMY = [
     "M&A", "earnings", "guidance_change", "financing", "management_change",
@@ -13,34 +11,28 @@ TAXONOMY = [
 ]
 
 
-def _client(cfg):
-    from openai import OpenAI
-
-    return OpenAI(api_key=cfg.settings.openai_api_key)
-
-
-def chat_json(cfg, system: str, user: str, model: str = None) -> dict:
-    client = _client(cfg)
-    resp = client.chat.completions.create(
-        model=model or cfg.settings.openai_model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.2,
-    )
-    return json.loads(resp.choices[0].message.content or "{}")
+def _resolve_models(cfg, provider):
+    judge_default, classify_default = models_for(provider.name)
+    judge = cfg.settings.llm_model or judge_default
+    classify = cfg.settings.llm_classify_model or classify_default
+    return judge, classify
 
 
 def classify_text(cfg, title: str, text: str) -> dict:
+    provider = get_provider(cfg)
+    if isinstance(provider, NoneProvider):
+        raise RuntimeError("no LLM provider configured")
+    _, classify_model = _resolve_models(cfg, provider)
+    if not classify_model:
+        raise RuntimeError("no classification model configured")
+
     system = (
         "You classify a corporate/financial event into exactly one category. "
-        "Return JSON with keys 'event_type' and 'confidence' (0-1). "
+        "Return a JSON object with keys 'event_type' and 'confidence' (0-1). "
         f"Allowed event_type values: {', '.join(TAXONOMY)}."
     )
     user = f"Title: {title}\n\nText:\n{text[:2500]}"
-    return chat_json(cfg, system, user, model=cfg.settings.openai_classify_model)
+    return provider.chat_json(system, user, classify_model)
 
 
 def _coverage_context(coverage) -> str:
@@ -57,14 +49,14 @@ def _judgment_system() -> str:
         "'why it matters for us' note. You may state ONLY facts present in the provided "
         "SOURCE TEXT. Never introduce a figure, percentage, dollar amount, date, or count "
         "that is not verbatim in the SOURCE TEXT. If a figure is not present, omit it. "
-        "Return JSON with keys: 'summary' (string, at most 2 sentences), "
+        "Return a JSON object with keys: 'summary' (string, at most 2 sentences), "
         "'why_it_matters' (string, exactly 1 sentence), "
         "'figures_cited' (array of every number/percentage/dollar amount you used, "
         "copied verbatim from the source), and 'confidence' (float 0-1)."
     )
 
 
-def write_judgment(cfg, event: Event, source_text: str, coverage, omit: list = None) -> Judgment:
+def write_judgment(cfg, provider, model, event, source_text, coverage, omit=None) -> Judgment:
     item = event.item
     user = (
         f"Coverage context: {_coverage_context(coverage)}\n"
@@ -74,7 +66,7 @@ def write_judgment(cfg, event: Event, source_text: str, coverage, omit: list = N
     if omit:
         user += f"\n\nDo NOT mention these figures (they are not in the source): {', '.join(omit)}."
 
-    data = chat_json(cfg, _judgment_system(), user, model=cfg.settings.openai_model)
+    data = provider.chat_json(_judgment_system(), user, model)
     return Judgment(
         summary=str(data.get("summary", "")).strip(),
         why_it_matters=str(data.get("why_it_matters", "")).strip(),
@@ -114,18 +106,22 @@ def build_source_text(event: Event, source_text: str) -> str:
 
 
 def judgment_for_event(cfg, event: Event, source_text: str, coverage) -> Judgment:
-    """Produce a grounded judgment. LLM with a grounding retry when a key is present,
-    otherwise the deterministic metadata-only fallback."""
+    """Produce a grounded judgment: LLM with a grounding retry when a provider is
+    configured, otherwise the deterministic metadata-only fallback."""
     full_source = build_source_text(event, source_text)
+    provider = get_provider(cfg)
+    if isinstance(provider, NoneProvider):
+        return fallback_judgment(event)
 
-    if not cfg.settings.llm_enabled:
+    judge_model, _ = _resolve_models(cfg, provider)
+    if not judge_model:
         return fallback_judgment(event)
 
     try:
-        j = write_judgment(cfg, event, full_source, coverage)
+        j = write_judgment(cfg, provider, judge_model, event, full_source, coverage)
         grounded, ungrounded = verify_grounding(j.summary, j.why_it_matters, j.figures_cited, full_source)
         if not grounded:
-            j2 = write_judgment(cfg, event, full_source, coverage, omit=ungrounded)
+            j2 = write_judgment(cfg, provider, judge_model, event, full_source, coverage, omit=ungrounded)
             grounded, ungrounded = verify_grounding(j2.summary, j2.why_it_matters, j2.figures_cited, full_source)
             j2.grounded = grounded
             j2.ungrounded_figures = ungrounded

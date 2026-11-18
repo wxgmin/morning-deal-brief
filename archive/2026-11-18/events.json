@@ -1,5 +1,114 @@
 {
   "date": "2026-11-18",
   "items": [],
-  "price_moves": []
+  "price_moves": [
+    {
+      "ticker": "GGG",
+      "company": "Graco Inc.",
+      "role": "client",
+      "date": "2026-11-17",
+      "close": 71.04000091552734,
+      "pct_change": -0.5877388389675664,
+      "volume": 2249600.0,
+      "volume_z": 0.055082905129306775,
+      "z_score": -0.2433067261047499,
+      "large_move": false
+    },
+    {
+      "ticker": "IEX",
+      "company": "IDEX Corporation",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 232.58999633789062,
+      "pct_change": -0.41957912214635185,
+      "volume": 595900.0,
+      "volume_z": -0.34662171290746235,
+      "z_score": -0.2942437183119323,
+      "large_move": false
+    },
+    {
+      "ticker": "NDSN",
+      "company": "Nordson Corporation",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 319.7099914550781,
+      "pct_change": -0.8835584465175073,
+      "volume": 368600.0,
+      "volume_z": 0.16471877526239856,
+      "z_score": -0.5831791250702043,
+      "large_move": false
+    },
+    {
+      "ticker": "LECO",
+      "company": "Lincoln Electric Holdings",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 270.80999755859375,
+      "pct_change": -1.9301864297463611,
+      "volume": 312300.0,
+      "volume_z": -0.4149960615733473,
+      "z_score": -0.8523482510870988,
+      "large_move": false
+    },
+    {
+      "ticker": "SNA",
+      "company": "Snap-on Incorporated",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 360.8299865722656,
+      "pct_change": -1.1397582874637324,
+      "volume": 296400.0,
+      "volume_z": -0.2719533530756887,
+      "z_score": -1.185335928134937,
+      "large_move": false
+    },
+    {
+      "ticker": "DCI",
+      "company": "Donaldson Company",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 84.55000305175781,
+      "pct_change": -0.7629036616975893,
+      "volume": 885300.0,
+      "volume_z": 0.9061681556917522,
+      "z_score": -0.560080030305279,
+      "large_move": false
+    },
+    {
+      "ticker": "DOV",
+      "company": "Dover Corporation",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 203.02000427246094,
+      "pct_change": -1.5039738589961105,
+      "volume": 1090400.0,
+      "volume_z": -0.5085003016931829,
+      "z_score": -0.9890852112250981,
+      "large_move": false
+    },
+    {
+      "ticker": "IR",
+      "company": "Ingersoll Rand",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 82.06999969482422,
+      "pct_change": -1.6301097990852997,
+      "volume": 4768800.0,
+      "volume_z": 0.22758302676478123,
+      "z_score": -0.8385311437888011,
+      "large_move": false
+    },
+    {
+      "ticker": "FTV",
+      "company": "Fortive Corporation",
+      "role": "peer",
+      "date": "2026-11-17",
+      "close": 66.06999969482422,
+      "pct_change": -2.162000756499727,
+      "volume": 2616100.0,
+      "volume_z": 0.04581624464998752,
+      "z_score": -1.3506820307066816,
+      "large_move": false
+    }
+  ]
 }

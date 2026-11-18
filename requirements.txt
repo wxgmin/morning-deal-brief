@@ -1,6 +1,7 @@
 edgartools>=0.4
 feedparser>=6.0.11
 openai>=1.40
+anthropic>=0.40
 requests>=2.31
 PyYAML>=6.0
 python-dotenv>=1.0

@@ -106,10 +106,14 @@ def _run_backfill(cfg, days: int, end_date: str) -> None:
     # Collect the full window once, then bucket per day.
     edgar_all = edgar.collect_filings(cfg.coverage.companies, start, end)
     market_series = market.collect_market_series(cfg.coverage.companies, start, end)
+    trading_dates = sorted(market_series.keys())
 
     for d in dates:
         day_edgar = [it for it in edgar_all if it.published == d]
-        day_moves = market_series.get(d, [])
+        # A morning brief shows the latest completed trading day (<= d), so holidays
+        # and the current (not-yet-closed) day still get a populated table.
+        candidates = [t for t in trading_dates if t <= d]
+        day_moves = market_series[candidates[-1]] if candidates else []
         run_pipeline(
             cfg,
             as_of_date=d,

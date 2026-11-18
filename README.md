@@ -48,17 +48,33 @@ Copy `.env.example` to `.env` and fill in the values (`.env` is gitignored, neve
 
 | Variable | Purpose | Required for |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | LLM judgment/classification | LLM-quality briefs |
-| `OPENAI_MODEL` | Judgment model (default `gpt-4o`) | — |
-| `OPENAI_CLASSIFY_MODEL` | Classification model (default `gpt-4o-mini`) | — |
+| `LLM_PROVIDER` | `auto` \| `openai` \| `anthropic` \| `gemini` \| `openrouter` \| `local` \| `none` | choosing the LLM |
+| `LLM_API_KEY` | Generic key for the selected provider | any API-backed provider |
+| `LLM_BASE_URL` | Custom endpoint (local/Ollama/OpenRouter/proxy) | `local` / `openrouter` |
+| `LLM_MODEL` / `LLM_CLASSIFY_MODEL` | Override the judgment / classification model | optional |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | Provider-specific keys (alternative to `LLM_API_KEY`) | the matching provider |
 | `DELIVERY` | `slack` / `email` / `both` / `none` | delivery |
 | `SLACK_WEBHOOK_URL` | Slack incoming webhook | Slack delivery |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_USER` `SMTP_PASSWORD` `SMTP_FROM` `EMAIL_RECIPIENTS` | Email (SMTP) | email delivery |
 | `EDGAR_IDENTITY` | SEC-required User-Agent (`Your Name you@example.com`) | EDGAR collection |
 
-> Without `OPENAI_API_KEY` the pipeline still runs end-to-end using a deterministic,
-> metadata-only judgment (no invented figures) — useful for testing and the demo archive.
-> Add the key to unlock the LLM "why it matters" quality.
+### Switching LLM providers
+
+The LLM layer is provider-agnostic: set `LLM_PROVIDER` and the matching key and the
+rest of the pipeline is unchanged. `auto` (default) picks the first available of
+Anthropic → Gemini → OpenAI → none.
+
+- **OpenAI** — `LLM_PROVIDER=openai` + `OPENAI_API_KEY`
+- **Anthropic Claude** — `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`
+- **Gemini** — `LLM_PROVIDER=gemini` + `GEMINI_API_KEY` (or `LLM_API_KEY`)
+- **OpenRouter** — `LLM_PROVIDER=openrouter` + `LLM_API_KEY`
+- **Local (Ollama/LM Studio)** — `LLM_PROVIDER=local` + `LLM_BASE_URL=http://localhost:11434/v1` + `LLM_MODEL=...`
+- **None** — `LLM_PROVIDER=none`
+
+> Without any key the pipeline still runs end-to-end using a deterministic,
+> metadata-only judgment (no invented figures) — useful for testing and the demo
+> archive. Add a key/provider to unlock the LLM "why it matters" quality. A ChatGPT
+> consumer account cannot be used directly; use one of the API-backed providers above.
 
 ## Running
 

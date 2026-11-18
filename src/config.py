@@ -14,24 +14,20 @@ from .models import Company
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COVERAGE_PATH = PROJECT_ROOT / "config" / "coverage.yaml"
 
-EVENT_TAXONOMY = [
-    "M&A",
-    "earnings",
-    "guidance_change",
-    "financing",
-    "management_change",
-    "activist",
-    "rating_change",
-    "large_price_move",
-    "other",
-]
-
 
 @dataclass
 class Settings:
+    # LLM provider selection (pluggable)
+    llm_provider: str = "auto"  # auto | openai | anthropic | gemini | openrouter | local | none
+    llm_api_key: Optional[str] = None
+    llm_base_url: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_classify_model: Optional[str] = None
     openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4o"
-    openai_classify_model: str = "gpt-4o-mini"
+    anthropic_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+
+    # Delivery
     slack_webhook_url: Optional[str] = None
     smtp_host: Optional[str] = None
     smtp_port: int = 587
@@ -45,7 +41,12 @@ class Settings:
 
     @property
     def llm_enabled(self) -> bool:
-        return bool(self.openai_api_key)
+        p = (self.llm_provider or "auto").strip().lower()
+        if p == "none":
+            return False
+        if p == "local":
+            return True
+        return bool(self.openai_api_key or self.anthropic_api_key or self.gemini_api_key or self.llm_api_key)
 
 
 @dataclass
@@ -83,13 +84,23 @@ class AppConfig:
 def _load_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env", override=False)
 
+    # Also load an existing Gemini key from the user-scoped config file, if present.
+    gemini_env = Path.home() / ".config" / "gemini" / ".env"
+    if gemini_env.exists():
+        load_dotenv(gemini_env, override=False)
+
     def split_emails(v: str) -> list:
         return [x.strip() for x in v.split(",") if x.strip()]
 
     return Settings(
+        llm_provider=os.getenv("LLM_PROVIDER", "auto"),
+        llm_api_key=os.getenv("LLM_API_KEY") or None,
+        llm_base_url=os.getenv("LLM_BASE_URL") or None,
+        llm_model=os.getenv("LLM_MODEL") or None,
+        llm_classify_model=os.getenv("LLM_CLASSIFY_MODEL") or None,
         openai_api_key=os.getenv("OPENAI_API_KEY") or None,
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-        openai_classify_model=os.getenv("OPENAI_CLASSIFY_MODEL", "gpt-4o-mini"),
+        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
+        gemini_api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or None,
         slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL") or None,
         smtp_host=os.getenv("SMTP_HOST") or None,
         smtp_port=int(os.getenv("SMTP_PORT", "587")),
