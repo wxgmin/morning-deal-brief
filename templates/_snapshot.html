@@ -1,0 +1,593 @@
+{#- Market snapshot partial. Classes only (no inline styles) so it is CSP-safe on the dashboard and works in the standalone brief.
+    Inputs: snap (dict), part ('before' | 'after' | 'all'), live (bool). Every number is already formatted or comes from `snap`. -#}
+{%- set tz = snap.timezone or 'UTC' -%}
+{%- set ns = namespace(seen_deals=false) -%}
+{%- macro spark(q) -%}
+  {%- set pts = spark_points(q.spark) -%}
+  {%- set big = spark_points(q.hist_1y, 300, 96) if q.hist_1y and q.hist_1y|length > 8 else '' -%}
+  {%- if pts and big -%}
+  <details class="chart-pop"><summary title="Show the 1-year chart for {{ q.label }}"><svg class="spark {{ dirclass(q) }}" viewBox="0 0 84 22" aria-hidden="true" focusable="false"><polyline points="{{ pts }}"></polyline></svg><span class="sr-only">1-year chart for {{ q.label }}</span></summary>
+    <figure class="chart-1y" data-chart="{{ q.symbol }}" data-kind="{{ q.kind }}">{% if live %}<div class="chart-ranges" role="group" aria-label="Chart range">{% for r, lab in [('1mo', '1M'), ('6mo', '6M'), ('1y', '1Y'), ('5y', '5Y')] %}<button type="button" data-range="{{ r }}"{% if r == '1y' %} aria-pressed="true"{% endif %}>{{ lab }}</button>{% endfor %}</div>{% endif %}<svg viewBox="0 0 300 96" role="img" aria-label="{{ q.label }} over one year"><polyline points="{{ big }}"></polyline></svg>
+      <figcaption>{{ q.label }} · 1 year (weekly) · low {{ ('%.' ~ (q.dp if q.dp is number else 2) ~ 'f')|format(q.low_1y) }} · high {{ ('%.' ~ (q.dp if q.dp is number else 2) ~ 'f')|format(q.high_1y) }}{% if q.pctile_1y is number %} · now {{ ordinal(q.pctile_1y) }} pct{% endif %}</figcaption></figure>
+  </details>
+  {%- elif pts -%}<svg class="spark {{ dirclass(q) }}" viewBox="0 0 84 22" aria-hidden="true" focusable="false"><polyline points="{{ pts }}"></polyline></svg>{%- endif -%}
+{%- endmacro -%}
+{%- macro src(q) -%}{%- if q.source_url|safeurl -%}<a class="snap-src" href="{{ q.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ q.provider or 'Source' }}</a>{%- endif -%}{%- endmacro -%}
+{%- macro interpretation(read, compact=false) -%}
+  {% if read %}
+    {% if read.context and read.context.url|safeurl %}
+      <p class="desk-context"><b>Possible catalyst</b> <a href="{{ read.context.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ read.context.title }}</a>
+        <span class="snap-sub">{{ read.context.publisher }} · {{ lt(read.context.published_at, tz) }}</span></p>
+    {% elif read.show_context and not compact %}
+      <p class="desk-context snap-sub">No clear catalyst in collected headlines.</p>
+    {% endif %}
+    <p class="desk-impact">{{ read.impact }}</p>
+  {% endif %}
+{%- endmacro -%}
+{%- macro ai_read(pid) -%}
+  {%- set panel = ((snap.morning_note or {}).get('panels') or {}).get(pid) -%}
+  {%- if panel -%}
+  <div class="ai-read" role="note"><span class="ai-read-label">AI read</span>
+    {%- for s in panel %} {{ s.text }}{% for f in s.facts %}<a class="tom-cite" href="#brief-{{ f.section }}" title="Source fact {{ f.id }}">{{ f.id[1:] }}</a>{% endfor %}{% endfor %}
+    <span class="ai-read-note">Checked: every figure matches this page.</span></div>
+  {%- endif -%}
+{%- endmacro -%}
+{%- macro state_note(q) -%}{%- if q.state == 'unavailable' -%}<span class="snap-bad">unavailable</span>{%- elif q.state == 'stale' -%}<span class="snap-warn" title="Last update {{ lt(q.as_of, tz) }}">stale</span>{%- endif -%}{%- endmacro -%}
+{%- macro releases(items, economic) -%}
+  <div class="snap-scroll"><table class="snap-table"><thead><tr><th>Release time</th><th>Region</th><th>Release and what to watch</th><th>Impact</th><th class="num">Actual</th><th>vs forecast</th><th class="num">Forecast</th><th class="num">Previous</th></tr></thead><tbody>
+    {%- for e in items %}
+    <tr class="impact-{{ e.impact|lower }}" data-calendar-region="{{ e.country }}">
+      <td>{{ (e.local_date or lt(e.time, tz, '%a %b %d')) if e.all_day else lt(e.time, tz, '%a %b %d · %H:%M') }}{% if e.all_day and e.impact != 'Holiday' %}<small>Time unconfirmed</small>{% endif %}</td>
+      <td>{{ e.country }}</td>
+      <td><b>{{ e.title }}</b>{% if e.period %}<small>{{ e.period }}</small>{% endif %}
+        {{ src(e) or src(economic) }}{% if e.cached_at %}<small>Last checked {{ lt(e.cached_at, tz) }}</small>{% endif %}{{ interpretation(e.desk_read) }}</td>
+      <td><span class="snap-impact">{{ e.impact }}</span></td>
+      <td class="num">{% if e.actual and e.actual_source_url|safeurl %}<b><a href="{{ e.actual_source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ e.actual }}</a></b>{% if e.actual_metric %}<small>{{ e.actual_metric }}</small>{% endif %}{% else %}—{% endif %}</td>
+      <td>{% if e.surprise %}<span class="surprise surprise-{{ e.surprise.direction }}{{ ' is-notable' if e.surprise.notable }}" title="{{ e.surprise.rule }}">{{ e.surprise.shown }} · {{ e.surprise.read }}</span>{% else %}<span class="snap-sub">—</span>{% endif %}</td>
+      <td class="num">{{ e.forecast or '—' }}{% if e.forecast and e.estimate_source_url|safeurl and e.estimate_source_url != e.actual_source_url %}<br><a class="snap-sub" href="{{ e.estimate_source_url|safeurl }}" target="_blank" rel="noopener noreferrer">Estimates</a>{% endif %}</td>
+      <td class="num">{{ e.previous or '—' }}</td>
+    </tr>
+    {%- endfor %}
+  </tbody></table></div>
+{%- endmacro -%}
+{%- macro qrow(q, show_ext=false) -%}
+  <tr class="{{ 'is-abnormal' if q.abnormal }}">
+    <th scope="row">{{ q.label }}{% if q.role == 'client' %} <span class="snap-tag">Focus</span>{% elif q.role == 'peer' %} <span class="snap-tag snap-tag-dim">Peer</span>{% endif %}
+      {%- if q.name %}<small>{{ q.name }}</small>{% endif %}</th>
+    {%- if q.state == 'unavailable' %}
+    <td colspan="5" class="snap-bad">Unavailable right now · {{ src(q) }}</td>
+    {%- else %}
+    <td class="num">{{ lvl(q) }}{% if q.currency and q.kind in ['equity', 'etf', 'price', 'crypto'] %} <small>{{ q.currency }}</small>{% endif %}</td>
+    <td class="num snap-chg {{ dirclass(q) }}">{{ chg(q) }}{% if q.abnormal %} <abbr class="snap-flag" title="At least 2 standard deviations versus this instrument's recent daily changes ({{ q.z }}σ)">{{ '%+.1f'|format(q.z) }}σ</abbr>{% endif %}</td>
+    <td class="num snap-sub">{{ signed(q.chg_5d, q.chg_unit) }}</td>
+    <td class="num snap-sub">{{ signed(q.chg_1m, q.chg_unit) }}</td>
+    <td>{{ spark(q) }}</td>
+    {%- endif %}
+    {%- if show_ext %}<td class="num">{% if q.extended %}<span class="snap-ext {{ 'up' if q.extended.pct > 0 else 'down' }}">{{ q.extended.label }} {{ '%+.2f'|format(q.extended.pct) }}%</span>{% else %}<span class="snap-sub">—</span>{% endif %}</td>{% endif %}
+    <td class="snap-sub">{{ state_note(q) }}{% if q.state != 'unavailable' %} {{ src(q) }} <small>{{ lt(q.as_of, tz) }}</small>{% endif %}</td>
+  </tr>
+{%- endmacro -%}
+{%- macro health() -%}
+  {%- set bad = [] -%}
+  {%- set names = {'quotes': 'Market quotes', 'watchlist': 'Watchlist quotes', 'curve': 'Treasury curve',
+                   'economic': 'Economic calendar', 'earnings': 'Earnings calendar', 'auctions': 'Treasury auctions',
+                   'spreads': 'Credit spreads', 'ipos': 'IPO calendar', 'headlines': 'Headline feeds',
+                   'snapshot': 'Market snapshot'} -%}
+  {%- for name, st in (snap.sources or {}).items() if st.state not in ['ok', 'disabled'] -%}{%- set _ = bad.append(names.get(name, name) ~ ' (' ~ st.state ~ ')') -%}{%- endfor -%}
+  {%- if bad -%}<p class="snap-note snap-warn-box">Market source issues: {{ bad|join(', ') }}.</p>{%- endif -%}
+{%- endmacro -%}
+
+<div class="snap" data-snapshot>
+{%- set since_by = {} -%}
+{%- for r in (snap.since or {}).get('markets', []) -%}{%- set _ = since_by.update({r.symbol: r}) -%}{%- endfor -%}
+{%- if part in ['before', 'all'] -%}
+  {%- if snap.alerts %}
+  <aside class="alerts" aria-label="Alerts">
+    <b class="alerts-title">{{ snap.alerts|length }} alert{{ 's' if snap.alerts|length != 1 }}</b>
+    <ul>{% for a in snap.alerts[:8] %}<li class="alert-{{ a.kind }}"><a href="#brief-{{ a.section }}">{{ a.text }}</a></li>{% endfor %}</ul>
+  </aside>
+  {%- endif %}
+  {%- if snap.summary and snap.sections|selectattr('id', 'equalto', 'summary')|selectattr('enabled')|list %}
+  <section class="snap-sec tom" id="brief-summary" aria-labelledby="tom-heading">
+    <div class="tom-main">
+      <h2 id="tom-heading">Top of the morning</h2>
+      {%- set note = snap.morning_note %}
+      {%- if note and note.state == 'ok' %}
+      <p class="tom-note">{% for s in note.sentences %}{{ s.text }}{% for f in s.facts %}<a class="tom-cite" href="#brief-{{ f.section }}" title="Source fact {{ f.id }} in the {{ f.section }} panel">{{ f.id[1:] }}</a>{% endfor %} {% endfor %}</p>
+      <p class="snap-sub tom-note-label">AI-written from the facts on this page; every figure was checked against the panel it cites before publishing.</p>
+      {%- elif note and note.state == 'rejected' %}
+      <p class="snap-sub">The AI note was withheld because it failed fact checks. The bullets below are built directly from the panels.</p>
+      {%- endif %}
+      <ol class="tom-list">
+        {%- for b in snap.summary %}
+        <li class="tom-{{ b.kind }}"><span>{{ b.text }}</span> <a class="tom-jump" href="#brief-{{ b.section }}">details<span class="sr-only"> in the {{ b.section }} panel</span></a></li>
+        {%- endfor %}
+      </ol>
+    </div>
+    <aside class="tom-side" aria-label="At a glance">
+      {%- if snap.tone %}
+      <p class="tom-tone"><span class="snap-tone snap-tone-{{ snap.tone.label|lower|replace(' ', '-') }}">{{ snap.tone.label }}</span>
+        <small>risk tone, {{ '%+d'|format(snap.tone.score) }} of ±{{ snap.tone.max }}</small></p>
+      {%- endif %}
+      {%- if snap.since %}
+      <h3>Since the last brief <small>{{ snap.since.prior_date }}</small></h3>
+      <table class="tom-since"><tbody>
+        {%- for r in snap.since.markets %}<tr><th scope="row">{{ r.label }}</th><td class="num">{{ r.then }} → {{ r.now }}</td><td class="num snap-chg {{ 'up' if r.delta > 0 else 'down' if r.delta < 0 else 'flat' }}">{{ r.shown }}</td></tr>{% endfor %}
+      </tbody></table>
+      {%- if snap.since.tone %}<p class="snap-sub">Tone moved from {{ snap.since.tone.then }} to {{ snap.since.tone.now }}.</p>{% endif %}
+      {%- if snap.since.new_signals %}<p class="snap-sub">New today: {{ snap.since.new_signals|map(attribute='title')|join('; ') }}.</p>{% endif %}
+      {%- if snap.since.cleared_signals %}<p class="snap-sub">No longer firing: {{ snap.since.cleared_signals|map(attribute='title')|join('; ') }}.</p>{% endif %}
+      {%- else %}<p class="snap-sub">Changes since the last brief appear here from the second edition.</p>{% endif %}
+    </aside>
+  </section>
+  {%- endif %}
+  {%- if live %}
+    <form class="ask" data-ask data-ask-url="{{ url_for('ask_brief') }}" data-ask-date="{{ selected or snap.brief_date }}">
+      <label for="ask-input">Ask this brief</label>
+      <div class="ask-row">
+        <input id="ask-input" name="question" type="search" maxlength="300" autocomplete="off"
+               placeholder="e.g. Why does the VIX term structure matter for IPOs today?">
+        <button type="submit" class="btn btn-primary">Ask</button>
+      </div>
+      <div class="ask-answer" data-ask-answer role="status" aria-live="polite" hidden></div>
+    </form>
+  {%- endif %}
+  {% if snap.desk_read and (snap.desk_read['items'] or snap.desk_read.state != 'off') %}
+  {%- set note_ok = (snap.morning_note or {}).get('state') == 'ok' %}
+  <section class="snap-sec desk-brief{{ ' is-secondary' if note_ok }}" id="desk-read" aria-labelledby="desk-read-heading">
+    <h2 id="desk-read-heading">Before the open <small>{{ 'Using ChatGPT plan' if snap.desk_read.state == 'chatgpt' else 'Desk read' }}</small></h2>
+    {% if snap.desk_read.state == 'limit' %}<p class="snap-note">ChatGPT plan limit reached. Showing the built-in desk read. <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">Manage usage</a></p>
+    {% elif snap.desk_read.state in ['unavailable', 'reconnect', 'ineligible'] %}
+      <p class="snap-note">ChatGPT analysis was unavailable for this edition. Showing the built-in desk read.{% if live %} <a href="{{ url_for('settings_view') }}#chatgpt">ChatGPT preferences</a>{% endif %}</p>
+    {% elif snap.desk_read.state == 'no_evidence' %}<p class="snap-note">No usable market evidence was collected for this read.</p>{% endif %}
+    {% if snap.desk_read['items'] %}
+    {% if note_ok %}<details class="snap-more"><summary>Show the desk read ({{ snap.desk_read['items']|length }} priorities with what to check)</summary>{% endif %}
+    <ol class="desk-priorities">
+      {% for item in snap.desk_read['items'] %}
+      {% if loop.index == 4 %}</ol><details class="snap-more"><summary>Show {{ loop.length - 3 }} more</summary><ol class="desk-priorities" start="4">{% endif %}
+      <li>
+        {% if item.source.url|safeurl %}<a href="{{ item.source.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>{% else %}<b>{{ item.title }}</b>{% endif %}
+        {% if item.time %}<small class="snap-sub">{{ item.local_date if item.all_day else lt(item.time, tz, '%a %b %d, %H:%M %Z') }}</small>{% endif %}
+        {{ interpretation(item, true) }}
+      </li>
+      {% endfor %}
+    </ol>{% if snap.desk_read['items']|length > 3 %}</details>{% endif %}{% if note_ok %}</details>{% endif %}
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if snap.generated_at %}<p class="snap-asof">Quotes as collected {{ lt(snap.generated_at, tz, '%a %b %d, %H:%M %Z') }}. Figures reflect each source’s latest available print.</p>{% endif %}
+  {{ health() }}
+{%- endif -%}
+{%- for sec in snap.sections if sec.enabled -%}
+  {%- if sec.id == 'deals' -%}{%- set ns.seen_deals = true -%}
+  {%- elif (part == 'all') or (part == 'before' and not ns.seen_deals) or (part == 'after' and ns.seen_deals) -%}
+
+  {%- if sec.id == 'heartbeats' -%}
+  <section class="snap-sec heartbeat-section" id="brief-heartbeats" aria-label="Market heartbeats">
+    <h2>Market heartbeats</h2>
+    {{ ai_read('heartbeats') }}
+    {% if snap.heartbeats %}
+    <div class="snap-cards">
+      {%- for q in snap.heartbeats %}
+      <div class="snap-card {{ 'is-abnormal' if q.abnormal }}">
+        <span class="snap-card-label">{{ q.label }}</span>
+        {%- if q.state == 'unavailable' %}<span class="snap-bad">Unavailable</span>
+        {%- else %}
+        <span class="snap-card-level">{{ lvl(q) }}</span>
+        <span class="snap-chg {{ dirclass(q) }}">{{ chg(q) }}{% if q.abnormal %} <abbr class="snap-flag" title="At least 2 standard deviations versus recent daily changes">{{ '%+.1f'|format(q.z) }}σ</abbr>{% endif %}</span>
+        {{ spark(q) }}
+        {%- if since_by.get(q.symbol) %}<span class="snap-sub">vs last brief {{ since_by[q.symbol].shown }}</span>{% endif %}
+        {%- if q.pctile_1y is number %}
+        <div class="range1y" title="1-year range {{ ('%.' ~ (q.dp if q.dp is number else 2) ~ 'f')|format(q.low_1y) }} to {{ ('%.' ~ (q.dp if q.dp is number else 2) ~ 'f')|format(q.high_1y) }}; today at the {{ ordinal(q.pctile_1y) }} percentile">
+          <span class="range1y-track"><span class="range1y-dot p{{ (q.pctile_1y // 5) * 5 }}"></span></span>
+          <span class="range1y-label">1-year range · {{ ordinal(q.pctile_1y) }} pct{% if q.pctile_1y >= 90 %} · near high{% elif q.pctile_1y <= 10 %} · near low{% endif %}</span>
+        </div>
+        {%- endif %}
+        <div class="snap-card-meta"><span>5 days {{ signed(q.chg_5d, q.chg_unit) }}</span><span>{{ lt(q.as_of, tz) }} {{ state_note(q) }}</span>{{ src(q) }}</div>
+        {%- if q.desk_read %}<details class="snap-more"><summary>What this could mean</summary>{{ interpretation(q.desk_read) }}</details>{% endif %}
+        {%- endif %}
+      </div>
+      {%- endfor %}
+    </div>
+    {% else %}<p class="snap-note">Pin an enabled instrument in Market preferences to include it here.</p>{% endif %}
+  </section>
+
+  {%- elif sec.id == 'tone' and snap.tone -%}
+  <section class="snap-sec risk-section" id="brief-tone" aria-label="Risk tone">
+    <h2>Risk tone <span class="snap-tone snap-tone-{{ snap.tone.label|lower|replace(' ', '-') }}">{{ snap.tone.label }}</span> <small>score {{ '%+d'|format(snap.tone.score) }} of ±{{ snap.tone.max }}</small></h2>
+    <details class="snap-how" open><summary>How this is scored</summary>
+      <ul>{% for c in snap.tone.components %}<li><b class="{{ 'up' if c.score > 0 else 'down' if c.score < 0 else 'flat' }}">{{ '%+d'|format(c.score) }}</b> {{ c.name }} · {{ c.detail }}</li>{% endfor %}</ul>
+      <p class="snap-note">{{ snap.tone.note }}</p>
+    </details>
+  </section>
+
+  {%- elif sec.id == 'reads' and snap.reads -%}
+  <section class="snap-sec read-section" id="brief-reads" aria-label="Market read">
+    <h2>Market read</h2>
+    {{ ai_read('reads') }}
+    <ul class="snap-reads">
+      {%- for r in snap.reads %}<li class="snap-read-{{ r.kind }}">{{ r.text }}</li>{% endfor %}
+    </ul>
+    <p class="snap-note">Rule-based reads assembled from the quotes in this brief; every figure is the same figure shown in the tables. "Tendency" sentences describe a usual relationship, not a forecast.</p>
+  </section>
+
+  {%- elif sec.id == 'signals' and snap.signals -%}
+  <section class="snap-sec signal-section" id="brief-signals" aria-label="What this usually means">
+    <h2>What this usually means <small>sourced historical tendencies · not forecasts</small></h2>
+    {{ ai_read('signals') }}
+    <ol class="snap-signals">
+      {%- for g in snap.signals %}
+      <li class="snap-signal">
+        <p class="snap-signal-head"><b>{{ g.title }}</b>{% if g.tag %} <span class="snap-tag snap-tag-dim">{{ g.tag|replace('_', ' ')|lower }}</span>{% endif %}{% if g.confidence %} <span class="snap-sub">confidence {{ g.confidence }}</span>{% endif %}</p>
+        <p>{{ g.text }}</p>
+        {%- if g.inputs %}<p class="snap-sub">Inputs: {{ g.inputs|join(' · ') }}</p>{% endif %}
+        <details class="snap-how"><summary>Caveats, threshold and sources</summary>
+          {%- if g.caveats %}<ul>{% for c in g.caveats %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}
+          {%- if g.provenance %}<p class="snap-note">Threshold: {{ g.provenance }}</p>{% endif %}
+          {%- if g.citations %}<p class="snap-note">Sources:{% for c in g.citations if c.url|safeurl %} <a href="{{ c.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ c.title }}</a>{% if not loop.last %} ·{% endif %}{% endfor %}</p>{% endif %}
+        </details>
+      </li>
+      {%- endfor %}
+    </ol>
+    <p class="snap-note">Each line fires only when its rule's condition is met by data in this brief. Figures are copied from the panels; wording comes from a researched rulebook (src/knowledge/signal_rules.json). Thresholds marked APP_HEURISTIC are this app's defaults, not published levels.</p>
+  </section>
+
+  {%- elif sec.id == 'ratepath' and snap.rate_path -%}
+  {%- set rp = snap.rate_path -%}
+  <section class="snap-sec ratepath" id="brief-ratepath" aria-label="Fed path">
+    <h2>Fed path <small>market-implied, from SOFR options · as of {{ rp.as_of }}{% if rp.target %} · current range {{ '%.2f'|format(rp.target.low) }}–{{ '%.2f'|format(rp.target.high) }}%{% endif %}</small></h2>
+    {{ ai_read('ratepath') }}
+    <div class="snap-scroll"><table class="snap-table rp-table"><thead><tr><th>3-month window from</th><th>Most likely range</th><th>Odds</th><th class="num">Implied mean</th><th class="num">vs prior day</th><th class="num">Middle 50%</th></tr></thead><tbody>
+      {%- for w in rp.windows %}
+      <tr><th scope="row">{{ w.window_start }}</th>
+        <td>{% if w.most_likely %}{{ '%.2f'|format(w.most_likely.low) }}–{{ '%.2f'|format(w.most_likely.high) }}% <span class="snap-sub">({{ '%.0f'|format(w.most_likely.p) }}%)</span>{% else %}—{% endif %}</td>
+        <td><span class="odds" role="img" aria-label="cut {{ w.p_cut }}%, hold {{ w.p_hold }}%, hike {{ w.p_hike }}%"><span class="odds-cut w{{ ((w.p_cut or 0) // 5 * 5)|int }}"></span><span class="odds-hold w{{ ((w.p_hold or 0) // 5 * 5)|int }}"></span><span class="odds-hike w{{ ((w.p_hike or 0) // 5 * 5)|int }}"></span></span>
+          <span class="snap-sub">cut {{ '%.0f'|format(w.p_cut or 0) }}% · hold {{ '%.0f'|format(w.p_hold or 0) }}% · hike {{ '%.0f'|format(w.p_hike or 0) }}%</span></td>
+        <td class="num">{{ '%.2f'|format(w.mean_pct) if w.mean_pct is not none else '—' }}%</td>
+        <td class="num snap-chg {{ 'up' if (w.mean_chg_bp or 0) > 0 else 'down' if (w.mean_chg_bp or 0) < 0 else 'flat' }}">{{ '%+.0fbp'|format(w.mean_chg_bp) if w.mean_chg_bp is not none else '—' }}</td>
+        <td class="num snap-sub">{% if w.p25_pct is not none %}{{ '%.2f'|format(w.p25_pct) }}–{{ '%.2f'|format(w.p75_pct) }}%{% else %}—{% endif %}</td></tr>
+      {%- endfor %}
+    </tbody></table></div>
+    <p class="snap-note">{{ rp.note }} Source: <a href="{{ rp.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ rp.provider }}</a>.</p>
+  </section>
+
+  {%- elif sec.id == 'movers' and snap.movers -%}
+  <section class="snap-sec" id="brief-movers" aria-label="Abnormal moves">
+    <h2>Abnormal moves <small>at least 2σ of the instrument's own recent daily changes</small></h2>
+    <ul class="snap-chips">
+      {%- for m in snap.movers %}<li><b>{{ m.label }}</b> <span class="snap-chg {{ dirclass(m) }}">{{ m.change }}</span> <span class="snap-sub">{{ m.level }} · {{ '%+.1f'|format(m.z) }}σ</span></li>{% endfor %}
+    </ul>
+  </section>
+
+  {%- elif sec.id == 'calendar' -%}
+  {%- set cal = snap.calendar|default({}) -%}
+  <section class="snap-sec catalyst-section" id="brief-calendar" aria-label="Catalyst calendar">
+    <h2>Catalyst calendar <small>{{ snap.brief_date }}{% if cal.economic and cal.economic.range_end %} to {{ cal.economic.range_end }} · {{ tz }}{% endif %}</small></h2>
+    {{ ai_read('calendar') }}
+    {%- if cal.economic %}
+      {%- if cal.economic.note %}<p class="snap-note">{{ cal.economic.note }}</p>{% endif %}
+      {% if live and cal.countries|length > 1 and (cal.economic['items'] or cal.economic.recent_results) %}<label class="calendar-filter">Show region <select data-calendar-filter><option value="">All selected</option>{% for country in cal.countries %}<option value="{{ country }}">{{ country }}</option>{% endfor %}</select></label>{% endif %}
+      {%- if cal.economic.results_state == 'unavailable' %}<p class="snap-note">Published actuals were unavailable at collection time.</p>
+      {%- elif cal.economic.results_state == 'partial' %}<p class="snap-note">Some published actuals were unavailable at collection time.</p>{% endif %}
+      {%- if cal.economic['items'] %}
+        {{ releases(cal.economic['items'], cal.economic) }}
+      {%- elif not cal.economic.note %}<p class="snap-note">No scheduled releases at this impact level for the selected regions.</p>{% endif %}
+      {% if cal.economic.recent_results %}
+        <details class="snap-how" open><summary>Recent results</summary>{{ releases(cal.economic.recent_results, cal.economic) }}</details>
+      {% endif %}
+    {%- else %}<p class="snap-bad">Economic calendar unavailable.</p>{% endif %}
+    {%- if cal.earnings %}
+      <details class="snap-how" {% if not live %}open{% endif %}><summary>Earnings</summary><div class="snap-cols">
+      {%- for day in cal.earnings.days %}
+        <div><h3>Earnings · {{ day.date }} <small>{{ day.total }} reporting</small></h3>
+        {%- if day.rows %}<ul class="snap-list">{% for r in day.rows %}<li class="{{ 'is-watch' if r.watch }}"><b>{{ r.symbol }}</b> {{ r.name }}{% if r.result %} <span class="eps eps-{{ r.result|replace(' ', '-') }}">EPS {{ r.eps_actual }} vs {{ r.eps_forecast }} · {{ '%+.1f'|format(r.eps_surprise_pct) }}% {{ r.result }}</span>{% endif %} <span class="snap-sub">{{ r.when }}{% if r.eps_forecast and not r.result %} · EPS est. {{ r.eps_forecast }}{% endif %}{% if r.market_cap %} · {{ money(r.market_cap) }}{% endif %}</span></li>{% endfor %}</ul>{% else %}<p class="snap-note">None listed.</p>{% endif %}</div>
+      {%- endfor %}
+      </div></details>
+    {%- endif %}
+    {%- if cal.auctions %}
+      <details class="snap-how" {% if not live %}open{% endif %}><summary>US Treasury auctions</summary>
+      {%- if cal.auctions['items'] %}<ul class="snap-list">{% for a in cal.auctions['items'][:10] %}<li><b>{{ a.auction_date }}</b> {{ a.term }} {{ a.type }}{% if a.reopening %} (reopening){% endif %}{% if a.offering %} · {{ money(a.offering) }}{% endif %}</li>{% endfor %}</ul>
+      {%- else %}<p class="snap-note">{{ cal.auctions.note or 'No Treasury auctions listed in the next seven days.' }}</p>{% endif %}</details>
+    {%- endif %}
+    {% if cal.economic and cal.economic.coverage %}
+    <details class="snap-how"><summary>Calendar coverage</summary>
+      {% if cal.economic.vendor_only %}<p class="snap-note">Supplemental vendor coverage for {{ cal.economic.vendor_only|join(', ') }}.</p>{% endif %}
+      <ul class="snap-list">{% for s in cal.economic.coverage %}
+        <li>{{ src(s) }} <span class="snap-sub">{{ s.country }} · {{ s.state }}{% if s.covered_through %} · through {{ s.covered_through }}{% endif %}</span></li>
+      {% endfor %}</ul>
+    </details>
+    {% endif %}
+    {% for schedule in [cal.earnings, cal.auctions] if schedule %}{{ src(schedule) }} {% endfor %}
+  </section>
+
+  {%- elif sec.id == 'curve' and snap.curve -%}
+  {%- set geo = curve_geometry(snap.curve) -%}
+  <section class="snap-sec" id="brief-curve" aria-label="Treasury curve">
+    <h2>Treasury curve <small>official par yields · {{ snap.curve.as_of }}</small></h2>
+    {{ ai_read('curve') }}
+    <div class="snap-curve">
+      {%- if geo %}
+      <svg viewBox="0 0 {{ geo.w }} {{ geo.h }}" class="curve-svg" role="img" aria-label="Treasury yield curve today versus prior close">
+        <polyline class="curve-prior" points="{{ geo.prior }}"></polyline>
+        <polyline class="curve-today" points="{{ geo.today }}"></polyline>
+        {%- for x, label in geo.labels %}<text class="curve-label" x="{{ x }}" y="{{ geo.h - 3 }}" text-anchor="middle">{{ label }}</text>{% endfor %}
+      </svg>
+      {%- endif %}
+      <table class="snap-table snap-curve-table"><thead><tr><th>Tenor</th><th class="num">Yield</th><th class="num">Change</th></tr></thead><tbody>
+        {%- for p in snap.curve.points %}<tr><th scope="row">{{ p.tenor }}</th><td class="num">{{ '%.2f'|format(p.yield) }}%</td><td class="num snap-chg {{ 'up' if (p.chg_bp or 0) > 0 else 'down' if (p.chg_bp or 0) < 0 else 'flat' }}">{{ '—' if p.chg_bp is none else '%+.0fbp'|format(p.chg_bp) }}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    {%- if snap.funding or snap.real_yields %}
+    <div class="snap-cols">
+      {%- if snap.funding %}{% set f = snap.funding %}
+      <div><h3>Funding rates <small>{{ (f.rates.EFFR or f.rates.SOFR).date }}</small></h3>
+        <ul class="snap-list">
+          {%- if f.target %}<li><b>Fed target range</b> {{ '%.2f'|format(f.target.low) }}–{{ '%.2f'|format(f.target.high) }}%</li>{% endif %}
+          {%- for k in ['EFFR', 'SOFR', 'TGCR', 'OBFR'] if f.rates[k] %}<li><b>{{ k }}</b> {{ '%.2f'|format(f.rates[k].rate) }}%{% if f.rates[k].volume_bn %} <span class="snap-sub">${{ f.rates[k].volume_bn }}bn</span>{% endif %}</li>{% endfor %}
+          {%- if f.sofr_minus_top_bp is not none %}<li class="snap-sub">SOFR is {{ '%+.0f'|format(f.sofr_minus_top_bp) }}bp versus the top of the range{% if f.sofr_minus_top_bp > 0 %} (above it: a money-market strain signal){% endif %}</li>{% endif %}
+        </ul>
+        <p class="snap-note">Source: <a href="{{ f.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ f.provider }}</a></p></div>
+      {%- endif %}
+      {%- if snap.real_yields %}{% set r = snap.real_yields %}
+      <div><h3>Real yields &amp; breakevens <small>{{ r.as_of }}</small></h3>
+        <ul class="snap-list">
+          <li><b>10Y real (TIPS)</b> {{ '%.2f'|format(r.real10) }}%{% if r.real10_chg_bp is not none %} <span class="snap-sub">{{ '%+.0f'|format(r.real10_chg_bp) }}bp d/d{% if r.real10_chg20_bp is not none %}, {{ '%+.0f'|format(r.real10_chg20_bp) }}bp 20d{% endif %}</span>{% endif %}</li>
+          <li><b>10Y breakeven</b> {{ '%.2f'|format(r.be10) }}%{% if r.be10_chg_bp is not none %} <span class="snap-sub">{{ '%+.0f'|format(r.be10_chg_bp) }}bp d/d{% if r.be10_chg20_bp is not none %}, {{ '%+.0f'|format(r.be10_chg20_bp) }}bp 20d{% endif %}</span>{% endif %}</li>
+          {%- if r.be5 is not none %}<li><b>5Y breakeven</b> {{ '%.2f'|format(r.be5) }}%</li>{% endif %}
+        </ul>
+        <p class="snap-note">{{ r.method }} Source: <a href="{{ r.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">U.S. Treasury</a></p></div>
+      {%- endif %}
+    </div>
+    {%- endif %}
+    <ul class="snap-chips">{% for s in snap.curve.spreads %}<li><b>{{ s.name }}</b> <span class="snap-chg {{ 'down' if s.inverted else 'up' }}">{{ '%+.0f'|format(s.bp) }}bp</span>{% if s.chg_bp is not none %} <span class="snap-sub">{{ '%+.0f'|format(s.chg_bp) }}bp on the day{% if s.inverted %} · inverted{% endif %}</span>{% endif %}</li>{% endfor %}</ul>
+    <p class="snap-note">Dotted line is the previous close. Source: <a href="{{ snap.curve.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">U.S. Department of the Treasury</a>. End-of-day par yields, so they can differ slightly from live quotes.</p>
+  </section>
+
+  {%- elif sec.id == 'boards' -%}
+  <section class="snap-sec" id="brief-boards" aria-label="Market boards">
+  <h2>Market boards</h2>
+    {{ ai_read('boards') }}
+  {%- for board in snap.boards %}
+  {%- set ok_quotes = board.quotes|selectattr('state', 'equalto', 'ok')|selectattr('z')|list -%}
+  {%- set lead = (ok_quotes|sort(attribute='z')|first) if ok_quotes else none -%}
+  {%- set top = (ok_quotes|sort(attribute='z', reverse=true)|first) if ok_quotes else none -%}
+  {%- set big = (lead if lead and top and (lead.z|abs) > (top.z|abs) else top) -%}
+  {%- set unusual = board.quotes|selectattr('abnormal')|list -%}
+  <details class="snap-board" {% if not live or unusual or board.group.id in ['equity_futures'] %}open{% endif %}>
+    <summary><span class="board-name">{{ board.group.label }}</span>
+      {%- if big %} <span class="board-hint">biggest move {{ big.label }} <span class="snap-chg {{ dirclass(big) }}">{{ chg(big) }}</span></span>{% endif %}
+      {%- if unusual %} <span class="snap-flag">{{ unusual|length }} unusual</span>{% endif %}</summary>
+    <p class="snap-why">{{ board.group.why }}</p>
+    <div class="snap-scroll"><table class="snap-table"><thead><tr><th>Market</th><th class="num">Level</th><th class="num">Change</th><th class="num">5-day</th><th class="num">1-month</th><th>30d</th><th>Source</th></tr></thead><tbody>
+      {%- for q in board.quotes %}{{ qrow(q) }}{% endfor %}
+    </tbody></table></div>
+  </details>
+  {%- else %}<p class="snap-note">No quotes available for the selected instruments.</p>{% endfor %}
+  </section>
+
+  {%- elif sec.id == 'watchlist' -%}
+  <section class="snap-sec" id="brief-watchlist" aria-label="Watchlist">
+    <h2>Watchlist {% if live %}<a class="section-action" href="{{ url_for('settings_view') }}#watchlist">Edit watchlist</a>{% endif %}</h2>
+    {{ ai_read('watchlist') }}
+    {% if snap.watchlist %}
+    <div class="snap-scroll"><table class="snap-table"><thead><tr><th>Name</th><th class="num">Last</th><th class="num">Change</th><th class="num">5-day</th><th class="num">1-month</th><th>30d</th><th class="num">Extended hours</th><th>Source</th></tr></thead><tbody>
+      {%- for q in snap.watchlist %}{{ qrow(q, true) }}{% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="snap-note">No watchlist quotes in this edition.</p>{% endif %}
+  </section>
+
+  {%- elif sec.id == 'capital' -%}
+  {%- set cap = snap.capital|default({}) -%}
+  <section class="snap-sec" id="brief-capital" aria-label="Capital markets">
+    <h2>Capital markets</h2>
+    {{ ai_read('capital') }}
+    <div class="snap-cols">
+      <div>
+        <h3>US credit spreads</h3>
+        {% if cap.spreads %}
+        <div class="snap-scroll"><table class="snap-table">
+          <thead><tr><th>Benchmark</th><th class="num">Spread</th><th class="num">Change</th><th>As of</th></tr></thead>
+          <tbody>{% for row in cap.spreads.rows %}<tr>
+            <th scope="row"><a href="{{ row.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ row.label }}</a></th>
+            <td class="num">{{ '%.0f'|format(row.level_bp) }} bp</td>
+            <td class="num">{{ '%+.0f'|format(row.change_bp) }} bp</td>
+            <td>{{ row.as_of }}{% if row.stale %} <span class="snap-warn">Stale</span>{% endif %}{{ interpretation(row.desk_read) }}</td>
+          </tr>{% endfor %}</tbody>
+        </table></div>
+        <p class="snap-note">ICE BofA option-adjusted spreads via FRED. Daily close, which may be published the following business day.</p>
+        {% else %}<p class="snap-note">Credit spread feed unavailable.</p>{% endif %}
+      </div>
+      <div>
+        <h3>US IPO calendar</h3>
+        {% if cap.ipos %}
+          {% if cap.ipos.rows %}
+          <div class="snap-scroll"><table class="snap-table">
+            <thead><tr><th>Company</th><th>Status</th><th>Date</th><th class="num">Offer amount</th></tr></thead>
+            <tbody>{% for row in cap.ipos.rows %}<tr><th scope="row">{{ row.name }}{% if row.symbol %}<small>{{ row.symbol }}</small>{% endif %}</th>
+              <td>{{ row.status|capitalize }}</td><td>{{ row.date }}</td><td class="num">{{ row.amount or '—' }}</td></tr>{% endfor %}</tbody>
+          </table></div>
+          {% else %}<p class="snap-note">No IPO activity listed in the calendar window.</p>{% endif %}
+          <p class="snap-note"><a href="{{ cap.ipos.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">Nasdaq IPO calendar</a>. Upcoming dates are estimates.</p>
+        {% else %}<p class="snap-note">IPO calendar unavailable.</p>{% endif %}
+      </div>
+    </div>
+    {% if snap.headlines and snap.headlines.by_theme %}
+    <div class="snap-cols capital-news">
+      {% for key in ['deals', 'ecm', 'credit_banks'] if key in snap.headlines.by_theme %}
+        {% set group = snap.headlines.by_theme[key] %}
+        <div><h3>{{ group.label }}</h3><ul class="snap-heads">
+          {% for item in group['items'][:2] %}<li><a href="{{ item.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a><span class="snap-sub">{{ item.publisher }} · {{ lt(item.published_at, tz) }}</span></li>{% endfor %}
+        </ul></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  {%- elif sec.id == 'headlines' -%}
+  {%- set hd = snap.headlines -%}
+  <section class="snap-sec headlines-section" id="brief-headlines" aria-label="Headlines">
+    <h2>Headlines {% if hd %}<small>{{ hd.feeds_ok }} of {{ hd.feeds_total }} feeds</small>{% endif %}</h2>
+    {{ ai_read('headlines') }}
+    {% if hd %}
+    <ol class="snap-heads">
+      {%- for e in hd.top %}
+      {%- if loop.index == 9 %}</ol><details class="snap-more"><summary>Show {{ loop.length - 8 }} more headlines</summary><ol class="snap-heads" start="9">{% endif %}
+      <li><a href="{{ e.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ e.title }}</a>
+        <span class="snap-sub">{{ e.publisher }} · {{ lt(e.published_at, tz) }}{% if e.also %} · +{{ e.also }} more outlet{{ 's' if e.also != 1 }}{% endif %}</span>
+        {%- for t in e.theme_labels %}<span class="snap-tag snap-tag-dim">{{ t }}</span>{% endfor %}
+        {%- if e.watch %}{% for w in e.watch %}<span class="snap-tag">{{ w }}</span>{% endfor %}{% endif %}
+        {{ interpretation(e.desk_read) }}
+        {% if e.also_sources %}<details class="snap-how"><summary>Other coverage</summary><ul class="snap-list">
+          {% for outlet in e.also_sources if outlet.url|safeurl %}<li><a href="{{ outlet.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ outlet.publisher }}</a></li>{% endfor %}
+        </ul></details>{% endif %}
+      </li>
+      {%- else %}<li class="snap-note">No headlines in the selected feeds inside the time window.</li>{% endfor %}
+    </ol>{% if hd.top|length > 8 %}</details>{% endif %}
+    {%- if hd.watchlist %}
+    <details class="snap-how" open><summary>Mentioning your watchlist ({{ hd.watchlist|length }})</summary>
+      <ul class="snap-list">{% for e in hd.watchlist %}<li><a href="{{ e.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ e.title }}</a> <span class="snap-sub">{{ e.publisher }} · {{ lt(e.published_at, tz) }}</span> {% for w in e.watch %}<span class="snap-tag">{{ w }}</span>{% endfor %}</li>{% endfor %}</ul>
+    </details>
+    {%- endif %}
+    {%- if hd.by_theme %}
+    <details class="snap-how"><summary>By theme</summary>
+      {%- for key, group in hd.by_theme.items() %}<h3>{{ group.label }}</h3><ul class="snap-list">{% for e in group['items'] %}<li><a href="{{ e.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ e.title }}</a> <span class="snap-sub">{{ e.publisher }}</span></li>{% endfor %}</ul>{% endfor %}
+    </details>
+    {%- endif %}
+    {% else %}<p class="snap-note">No market headlines were collected for this edition.</p>{% endif %}
+  </section>
+  {%- elif sec.id == 'dealflow' and snap.dealflow -%}
+  {%- set df = snap.dealflow -%}
+  <section class="snap-sec" id="brief-dealflow" aria-label="Deal flow">
+    <h2>Deal flow <small>market-wide SEC filings{% if df.watch_hits %} · <b>{{ df.watch_hits }} on your watchlist</b>{% endif %}</small></h2>
+    {{ ai_read('dealflow') }}
+    <div class="deal-grid">
+      {%- for key in ['mna', 'ipo_filings', 'pricings', 'tender', 'activist', 'insiders', 'proxies'] if df.groups[key] %}
+      {%- set g = df.groups[key] %}
+      <div class="deal-col">
+        <h3>{{ g.label }} <small>{{ g.count if g.count is number else 0 }}</small></h3>
+        <p class="snap-why">{{ g.why }}</p>
+        {%- if g.state != 'ok' %}<p class="snap-bad">Unavailable right now.</p>
+        {%- elif g['items'] %}
+        <ul class="snap-list deal-list">
+          {%- for r in g['items'][:6] %}<li class="{{ 'is-watch' if r.watch }}"><a href="{{ r.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ r.company }}</a>{% if r.tickers %} <span class="snap-sub">{{ r.tickers|join(', ') }}</span>{% endif %}{% if r.side %} <span class="snap-chg {{ 'up' if r.side == 'Buy' else 'down' }}">{{ r.side }} {{ money(r.value) }}</span>{% if r.cluster %} <span class="snap-flag">cluster buy</span>{% endif %} <span class="snap-sub">{{ r.insider }}{% if r.title %}, {{ r.title }}{% endif %}</span>{% endif %} <span class="snap-sub">{{ r.form }} · {{ r.date }}</span>{% if r.watch %} <span class="snap-tag">Watchlist</span>{% endif %}</li>{% endfor %}
+        </ul>
+        {%- if g['items']|length > 6 %}<details class="snap-more"><summary>Show {{ g['items']|length - 6 }} more</summary><ul class="snap-list deal-list">
+          {%- for r in g['items'][6:] %}<li><a href="{{ r.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ r.company }}</a> <span class="snap-sub">{{ r.form }} · {{ r.date }}</span></li>{% endfor %}</ul></details>{% endif %}
+        {%- else %}<p class="snap-note">None in the latest filings.</p>{% endif %}
+      </div>
+      {%- endfor %}
+    </div>
+    <p class="snap-note">Every row links to the filing on SEC EDGAR. A filing is a fact that something was filed, not a claim about the deal's terms. Source: <a href="{{ df.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">SEC EDGAR latest filings</a> and full-text search.</p>
+  </section>
+
+  {%- elif sec.id == 'stockmovers' and snap.stock_movers -%}
+  {%- set sm = snap.stock_movers -%}
+  <section class="snap-sec" id="brief-stockmovers" aria-label="Stock movers">
+    <h2>Stock movers <small>US, $2B+ market value</small></h2>
+    {{ ai_read('stockmovers') }}
+    <div class="deal-grid">
+      {%- for key, label in [('gainers', 'Biggest gainers'), ('losers', 'Biggest decliners'), ('active', 'Most active')] %}
+      <div class="deal-col"><h3>{{ label }}</h3>
+        {%- if sm[key] %}
+        <table class="snap-table mover-table"><tbody>
+          {%- for r in sm[key] %}<tr class="{{ 'is-watch' if r.watch }}"><th scope="row"><a href="{{ r.url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ r.symbol }}</a><small>{{ r.name }}</small></th>
+            <td class="num snap-chg {{ 'up' if (r.pct or 0) > 0 else 'down' }}">{{ '%+.1f'|format(r.pct) }}%</td>
+            <td class="num snap-sub">{% if r.rel_volume %}{{ '%.1f'|format(r.rel_volume) }}x vol{% endif %}</td>
+            <td class="num snap-sub">{% if r.pre_pct is number %}pre {{ '%+.1f'|format(r.pre_pct) }}%{% elif r.post_pct is number %}post {{ '%+.1f'|format(r.post_pct) }}%{% endif %}</td></tr>{% endfor %}
+        </tbody></table>
+        {%- else %}<p class="snap-bad">Unavailable right now.</p>{% endif %}
+      </div>
+      {%- endfor %}
+    </div>
+    <p class="snap-note">{{ sm.note }} Source: <a href="{{ sm.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ sm.provider }}</a>.</p>
+  </section>
+
+  {%- elif sec.id == 'positioning' and (snap.positioning or snap.global_yields or snap.oil_curve) -%}
+  <section class="snap-sec" id="brief-positioning" aria-label="Positioning and global curves">
+    <h2>Positioning &amp; global curves</h2>
+    {{ ai_read('positioning') }}
+    <div class="snap-cols">
+      {%- if snap.global_yields %}
+      <div><h3>Global 10-year yields</h3>
+        <table class="snap-table"><tbody>
+          {%- for r in snap.global_yields.rows %}<tr><th scope="row">{{ r.label }}<small>{{ r.provider }} · {{ r.as_of }}</small></th><td class="num">{{ '%.2f'|format(r['yield']) }}%</td><td class="num snap-chg {{ 'up' if r.chg_bp > 0 else 'down' if r.chg_bp < 0 else 'flat' }}">{{ '%+.0f'|format(r.chg_bp) }}bp</td></tr>{% endfor %}
+        </tbody></table>
+        <p class="snap-note">{{ snap.global_yields.note }}</p></div>
+      {%- endif %}
+      {%- if snap.oil_curve %}{% set oc = snap.oil_curve %}
+      <div><h3>WTI futures curve <small>{{ oc.shape }}</small></h3>
+        <table class="snap-table"><tbody>
+          {%- for leg in oc.legs %}<tr><th scope="row">{{ leg.label or '—' }}</th><td class="num">{{ '%.2f'|format(leg.price) if leg.price is number else '—' }}</td></tr>{% endfor %}
+          <tr><th scope="row">Front minus 12th month</th><td class="num snap-chg {{ 'up' if oc.m1_m12 > 0 else 'down' }}">{{ '%+.2f'|format(oc.m1_m12) }}</td></tr>
+        </tbody></table>
+        <p class="snap-note">{{ oc.note }}</p></div>
+      {%- endif %}
+    </div>
+    {%- if snap.positioning %}{% set pos = snap.positioning %}
+    <h3>Speculative positioning <small>CFTC, as of {{ pos.as_of }}</small></h3>
+    <div class="snap-scroll"><table class="snap-table"><thead><tr><th>Market</th><th>Who</th><th class="num">Net contracts</th><th class="num">Week change</th><th>3-year range</th></tr></thead><tbody>
+      {%- for r in pos.rows %}<tr class="{{ 'is-abnormal' if r.extreme }}"><th scope="row">{{ r.label }}</th><td class="snap-sub">{{ r.trader }}</td>
+        <td class="num">{{ '{:+,}'.format(r.net) }}</td><td class="num snap-chg {{ 'up' if r.change > 0 else 'down' if r.change < 0 else 'flat' }}">{{ '{:+,}'.format(r.change) }}</td>
+        <td>{% if r.pctile_3y is number %}<div class="range1y"><span class="range1y-track"><span class="range1y-dot p{{ (r.pctile_3y // 5) * 5 }}"></span></span><span class="range1y-label">{{ ordinal(r.pctile_3y) }} pct{% if r.extreme %} · <b>{{ r.extreme }}</b>{% endif %}</span></div>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>
+    <p class="snap-note">{{ pos.note }} Source: <a href="{{ pos.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ pos.provider }}</a>.</p>
+    {%- endif %}
+  </section>
+  {%- elif sec.id == 'sentiment' and (snap.breadth or snap.sentiment) -%}
+  <section class="snap-sec" id="brief-sentiment" aria-label="Breadth and sentiment">
+    <h2>Breadth &amp; sentiment</h2>
+    {{ ai_read('sentiment') }}
+    <div class="snap-cols">
+      {%- if snap.breadth %}{% set b = snap.breadth %}
+      <div><h3>S&amp;P 500 participation <small>{{ b.coverage }}</small></h3>
+        <table class="snap-table"><tbody>
+          <tr><th scope="row">Above 200-day average</th><td class="num">{{ '%.1f'|format(b.pct_above_200) if b.pct_above_200 is number else '—' }}%</td></tr>
+          <tr><th scope="row">Above 50-day average</th><td class="num">{{ '%.1f'|format(b.pct_above_50) }}%</td></tr>
+          <tr><th scope="row">Advancers / decliners</th><td class="num"><span class="up">{{ b.advancers }}</span> / <span class="down">{{ b.decliners }}</span></td></tr>
+          <tr><th scope="row">New 52-week highs / lows</th><td class="num">{{ b.new_highs }} / {{ b.new_lows }}</td></tr>
+          <tr><th scope="row">10-day advancing share (EMA)</th><td class="num">{{ b.ema10_adv_share if b.ema10_adv_share is number else '—' }}{% if b.thrust %} <span class="snap-flag">breadth thrust</span>{% endif %}</td></tr>
+        </tbody></table>
+        <p class="snap-why">Breadth shows whether a move is broad or carried by a few large stocks. Under 20% above the 200-day has marked washouts; a rising index with under half the stocks participating is read as fragile.</p>
+        <p class="snap-note">{{ b.note }}</p></div>
+      {%- endif %}
+      {%- if snap.sentiment %}{% set fg = snap.sentiment %}
+      <div><h3>Fear &amp; Greed <small>{{ fg.rating }}</small></h3>
+        <p class="fg-score"><b>{{ '%.0f'|format(fg.score) }}</b> <span class="snap-sub">/ 100 · prior close {{ fg.previous_close }} · week ago {{ fg.week_ago }} · month ago {{ fg.month_ago }}</span></p>
+        <div class="range1y"><span class="range1y-track"><span class="range1y-dot p{{ ((fg.score|int) // 5) * 5 }}"></span></span><span class="range1y-label">0 extreme fear · 100 extreme greed</span></div>
+        <table class="snap-table"><tbody>
+          {%- for c in fg.components %}<tr><th scope="row">{{ c.label }}</th><td class="num">{{ '%.0f'|format(c.score) }}</td><td class="snap-sub">{{ c.rating }}{% if c.label == 'Put/call options' and c.value is number %} · ratio {{ '%.2f'|format(c.value) }}{% endif %}</td></tr>{% endfor %}
+        </tbody></table>
+        <p class="snap-note">{{ fg.note }} Source: <a href="{{ fg.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ fg.provider }}</a>.</p></div>
+      {%- endif %}
+    </div>
+  </section>
+  {%- elif sec.id == 'economy' and snap.economy -%}
+  {%- set ec = snap.economy -%}
+  <section class="snap-sec" id="brief-economy" aria-label="US economy and liquidity">
+    <h2>US economy &amp; liquidity <small>official series, FRED</small></h2>
+    {{ ai_read('economy') }}
+    <div class="snap-cols">
+      <div><h3>Labour market</h3>
+        <table class="snap-table"><tbody>
+          {%- if ec.claims %}<tr><th scope="row">Initial jobless claims<small>week of {{ ec.claims.date }}</small></th><td class="num">{{ '{:,}'.format(ec.claims.latest) }}</td><td class="snap-sub">4-wk avg {{ '{:,}'.format(ec.claims.avg4) }} · {{ '%+.1f'|format(ec.claims.vs_low_pct) }}% vs 12-month low</td></tr>{% endif %}
+          {%- if ec.unemployment %}<tr><th scope="row">Unemployment rate<small>{{ ec.unemployment.date }}</small></th><td class="num">{{ '%.1f'|format(ec.unemployment.latest) }}%</td><td class="snap-sub">{% if ec.unemployment.chg_3m is number %}{{ '%+.1f'|format(ec.unemployment.chg_3m) }}pp over 3 months{% endif %}</td></tr>{% endif %}
+          {%- if ec.sahm %}<tr class="{{ 'is-abnormal' if ec.sahm.latest >= 0.5 }}"><th scope="row">Sahm rule indicator<small>{{ ec.sahm.date }}</small></th><td class="num">{{ '%.2f'|format(ec.sahm.latest) }}</td><td class="snap-sub">recession trigger at 0.50</td></tr>{% endif %}
+        </tbody></table>
+        <p class="snap-why">Claims are the most timely labour data; a steady rise from the low, or the Sahm rule crossing 0.50, has marked the early stage of past downturns.</p></div>
+      <div><h3>Rates, liquidity &amp; credit history</h3>
+        <table class="snap-table"><tbody>
+          {%- if ec.term_premium %}<tr><th scope="row">10Y term premium (Kim-Wright)<small>{{ ec.term_premium.date }}</small></th><td class="num">{{ '%.2f'|format(ec.term_premium.latest) }}%</td><td class="snap-sub">{{ '%+.0f'|format(ec.term_premium.chg20_bp) }}bp over 20 sessions</td></tr>{% endif %}
+          {%- if ec.reserves_bn %}<tr><th scope="row">Bank reserves<small>{{ ec.reserves_bn.date }}</small></th><td class="num">${{ '{:,}'.format(ec.reserves_bn.latest) }}bn</td><td class="snap-sub">{% if ec.reserves_bn.chg_4w_bn is number %}{{ '{:+,}'.format(ec.reserves_bn.chg_4w_bn) }}bn over 4 weeks{% endif %}</td></tr>{% endif %}
+          {%- if ec.rrp_bn %}<tr><th scope="row">Overnight reverse repo<small>{{ ec.rrp_bn.date }}</small></th><td class="num">${{ '%.1f'|format(ec.rrp_bn.latest) }}bn</td><td class="snap-sub">{% if ec.iorb %}IORB {{ '%.2f'|format(ec.iorb.latest) }}%{% endif %}</td></tr>{% endif %}
+          {%- if ec.ebp %}<tr class="{{ 'is-abnormal' if ec.ebp.ebp_bp > 0 }}"><th scope="row">Excess bond premium (Fed)<small>{{ ec.ebp.date[:7] }}</small></th><td class="num">{{ '%+d'|format(ec.ebp.ebp_bp) }}bp</td><td class="snap-sub">{{ '%+d'|format(ec.ebp.chg_3m_bp) }}bp over 3 months · model recession odds {{ '%.1f'|format(ec.ebp.recession_prob_pct) }}% · <a href="{{ ec.ebp.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">Fed note</a></td></tr>{% endif %}
+          {%- for key, label in [('hy', 'High-yield OAS'), ('ig', 'Investment-grade OAS')] if ec[key] %}<tr><th scope="row">{{ label }}<small>{{ ec[key].date }}</small></th><td class="num">{{ ec[key].level_bp }}bp</td><td>{% if ec[key].pctile_5y is number %}<div class="range1y"><span class="range1y-track"><span class="range1y-dot p{{ (ec[key].pctile_5y // 5) * 5 }}"></span></span><span class="range1y-label">{{ ordinal(ec[key].pctile_5y) }} pct of {{ '%.0f'|format(ec[key].years) }} years</span></div>{% endif %}</td></tr>{% endfor %}
+        </tbody></table>
+        <p class="snap-why">Term premium is the extra yield investors demand to hold long bonds; reserves and reverse repo are the system's cash buffers, and when repo trades above IORB those buffers are getting thin.</p></div>
+    </div>
+    <p class="snap-note">{{ ec.note }} Source: <a href="{{ ec.source_url|safeurl }}" target="_blank" rel="noopener noreferrer">{{ ec.provider }}</a>.</p>
+  </section>
+  {%- endif -%}
+
+  {%- endif -%}
+{%- endfor -%}
+</div>

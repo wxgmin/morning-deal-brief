@@ -1,116 +1,99 @@
-"""Press-release and news RSS collection via feedparser."""
+"""Bounded RSS retrieval with explicit timestamps and issuer attribution."""
 from __future__ import annotations
 
 import logging
 import re
-from datetime import date, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timedelta, timezone
+from urllib.parse import urljoin
 
+from bs4 import BeautifulSoup
 import feedparser
-import requests
 
+from ..guardrails import safe_http_url
 from ..models import RawItem, SOURCE_RSS
+from ..util import get_bytes
 
 logger = logging.getLogger(__name__)
 
-_USER_AGENT = "MorningDealBrief/1.0"
+
+def _clean(value):
+    return " ".join(BeautifulSoup(value, "html.parser").stripped_strings)
 
 
-def collect_rss(feeds: list, coverage, since: str = None) -> list:
-    """Collect and normalize RSS entries from the configured feeds.
-
-    Entries are attributed to the coverage company actually named in the headline,
-    else tagged as sector-level news. A ``since`` date (YYYY-MM-DD) optionally drops
-    older entries; the default keeps the last 7 days.
-    """
-    if since is None:
-        since = (date.today() - timedelta(days=7)).isoformat()
-
-    items: list[RawItem] = []
-    for feed in feeds:
-        url = feed.get("url", "")
-        if not url:
-            continue
+def _published(entry):
+    value = entry.get("published_parsed") or entry.get("created_parsed")
+    if value:
         try:
-            resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=15)
-            resp.raise_for_status()
-            parsed = feedparser.parse(resp.content)
-        except Exception as exc:
-            logger.warning("RSS feed failed (%s): %s", url, exc)
-            continue
+            return datetime(*value[:6], tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            pass
+    return None
 
-        for entry in parsed.entries:
-            title = entry.get("title", "").strip()
-            if not title:
-                continue
-            summary = entry.get("summary", "").strip()
-            link = entry.get("link", "")
-            published_iso = _to_iso(entry)
-            if published_iso and published_iso < since:
-                continue
 
-            company = _attribute_company(title, url, coverage)
-            items.append(
-                RawItem(
-                    source=SOURCE_RSS,
-                    company=company.name,
-                    ticker=company.ticker,
-                    role=company.role,
-                    title=title,
-                    url=link,
-                    published=published_iso,
-                    summary=summary or title,
-                    extra={"feed": url},
+def _attribute_company(text, coverage):
+    selected = []
+    for co in coverage.companies:
+        name = re.sub(r"(?i)\s+(?:incorporated|inc|corporation|corp|limited|ltd|plc|holdings)\.?$", "", co.name)
+        ticker_pattern = rf"(?:\${re.escape(co.ticker)}\b|\b(?:NYSE|NASDAQ):\s*{re.escape(co.ticker)}\b)"
+        if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE) or re.search(ticker_pattern, text):
+            selected.append(co)
+    return selected
+
+
+def collect_rss(feeds: list, coverage, since: str = None, *, status=None) -> list:
+    since = since or (date.today() - timedelta(days=7)).isoformat()
+
+    def get_feed(feed):
+        url = feed.get("url", "")
+        try:
+            if not safe_http_url(url) or not url.startswith("https://"):
+                raise ValueError("feed URL must be HTTPS")
+            parsed = feedparser.parse(get_bytes(url, {"User-Agent": "MorningDealBrief/2.0"}, limit=2_000_000))
+            if not parsed.version or (parsed.bozo and not parsed.entries):
+                raise ValueError("invalid feed")
+            result = []
+            state = "ok"
+            for entry in parsed.entries[:150]:
+                published = _published(entry)
+                if not published:
+                    state = "partial"
+                    continue
+                if published.date().isoformat() < since:
+                    continue
+                link = safe_http_url(urljoin(url, entry.get("link") or "")) if entry.get("link") else ""
+                title = _clean(entry.get("title") or "")
+                if not title or not link:
+                    state = "partial"
+                    continue
+                publisher = _clean(entry.get("source", {}).get("title") or parsed.feed.get("title") or "")
+                if feed.get("type") == "press" and feed.get("ticker"):
+                    co = coverage.company_for_ticker(feed["ticker"])
+                    companies = [co] if co else []
+                else:
+                    companies = _attribute_company(title, coverage)
+                if not companies and feed.get("type") == "sector":
+                    from ..models import Company
+                    companies = [Company(coverage.sector, "", role="sector")]
+                if not companies:
+                    continue
+                summary = _clean(entry.get("summary") or "")[:1200]
+                result.extend(
+                    RawItem(SOURCE_RSS, co.name, co.ticker, co.role, title, link,
+                            published.date().isoformat(), summary,
+                            extra={"published_at": published.isoformat(), "feed": url, "publisher": publisher,
+                                   "publisher_type": feed.get("type", "news")})
+                    for co in companies
                 )
-            )
-    return items
+            return result, "partial" if len(parsed.entries) > 150 else state
+        except Exception as exc:
+            logger.warning("RSS feed unavailable (%s)", type(exc).__name__)
+            return [], "unavailable"
 
-
-def _attribute_company(text: str, feed_url: str, coverage):
-    """Attribute an RSS item to the coverage company actually named in the headline."""
-    from ..models import Company
-
-    t = (text or "").upper()
-
-    # 1. Full company name as a whole phrase.
-    for co in coverage.companies:
-        name = (co.name or "").upper()
-        if name and re.search(rf"(?<![A-Z0-9]){re.escape(name)}(?![A-Z0-9])", t):
-            return co
-
-    # 2. Ticker as a whole word (skip short/ambiguous tickers).
-    for co in coverage.companies:
-        ticker = (co.ticker or "").upper()
-        if len(ticker) >= 3 and ticker and re.search(rf"\b{re.escape(ticker)}\b", t):
-            return co
-
-    # 3. Short name (first token) as a whole word.
-    for co in coverage.companies:
-        parts = (co.name or "").strip().split()
-        short = parts[0].upper() if parts else ""
-        if len(short) >= 3 and re.search(rf"\b{re.escape(short)}\b", t):
-            return co
-
-    return Company(name="Sector", ticker="", role="sector")
-
-
-def _to_iso(entry) -> str:
-    """Normalize a feed entry's date to YYYY-MM-DD (handles RFC-2822 and ISO-8601)."""
-    from datetime import datetime
-
-    for key in ("published_parsed", "updated_parsed"):
-        t = entry.get(key)
-        if t:
-            try:
-                return datetime(*t[:6]).date().isoformat()
-            except Exception:
-                pass
-
-    published = entry.get("published", "") or entry.get("updated", "")
-    if not published:
-        return ""
-    try:
-        from email.utils import parsedate_to_datetime
-
-        return parsedate_to_datetime(published).date().isoformat()
-    except Exception:
-        return ""
+    output = []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        for feed, (items, state) in zip(feeds, executor.map(get_feed, feeds)):
+            output.extend(items)
+            if status is not None:
+                status[feed["url"]] = state
+    return output

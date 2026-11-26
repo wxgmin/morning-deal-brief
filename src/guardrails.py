@@ -1,114 +1,69 @@
-"""Grounding guardrail: enforce that every figure in a summary traces to its source.
-
-Two checks:
-  1. Strict: every self-declared ``figures_cited`` entry must appear (normalized)
-     in the source text.
-  2. Backstop: every currency/percentage figure independently extracted from the
-     summary/why-it-matters must match a like-unit figure present in the source
-     (unit-aware; sign-agnostic to tolerate "fell 3.2%" vs a source "-3.2%").
-"""
+"""Publication controls: source statements and fixed analyst follow-ups."""
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 
-_MULTIPLIERS = {
-    "thousand": 1e3, "million": 1e6, "billion": 1e9, "trillion": 1e12,
-    "thousands": 1e3, "millions": 1e6, "billions": 1e9, "trillions": 1e12,
-    "k": 1e3, "m": 1e6, "b": 1e9, "t": 1e12,
-    "mn": 1e6, "mm": 1e6, "bn": 1e9,
+MAX_EXCERPT = 2400
+
+# These are editorial questions and actions. They make no claims about an issuer.
+FOLLOW_UPS = {
+    "M&A": ("Review deal terms and financing.", "Assess read-through for the coverage list."),
+    "earnings": ("Review operating trends and cash flow.", "Compare reported results with prior guidance."),
+    "guidance_change": ("Revisit the operating outlook and valuation assumptions.",),
+    "financing": ("Review the impact on liquidity, leverage and capital allocation.",),
+    "management_change": ("Review succession plans and coverage implications.",),
+    "activist": ("Review the holder's stated intent and governance implications.",),
+    "ownership": ("Review ownership changes and the holder's disclosed intent.",),
+    "rating_change": ("Review potential implications for funding costs and debt capacity.",),
+    "bankruptcy": ("Review the court filings, liquidity position and creditor exposure.",),
+    "impairment": ("Review the charge, affected assets and implications for valuation.",),
+    "financial_reporting": ("Confirm which periods are affected before relying on the reported figures.",),
+    "large_price_move": ("Check for a disclosed catalyst and compare the move with peers.",),
+    "other": ("Review the source for potential coverage implications.",),
 }
-_MULT_ORDER = sorted(_MULTIPLIERS.items(), key=lambda kv: -len(kv[0]))
 
-_MULT_WORD = re.compile(r"(?:million|billions?|trillions?|thousands?|bn|mn|mm|[kmbt])\b", re.IGNORECASE)
-
-_NUM_TOKEN_RE = re.compile(
-    r"-?\$?\s?(?:\d[\d,]*(?:\.\d+)?|\.\d+)\s?(?:million|billions?|trillions?|thousands?|bn|mn|mm|[kmbt])?\s?%?",
+_CURRENCY = r"(?:[$€£¥]|(?:USD|EUR|GBP|JPY|CAD|AUD)\s+)"
+_NUMBER = r"(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+)"
+_UNIT = r"(?:\s?(?:%|x\b|bps?\b|basis points?\b|percent\b|(?:thousand|million|billion|trillion|bn|mn|mm|[kmbt])\b))"
+_AMOUNT = rf"(?:[+\-−])?{_CURRENCY}?{_NUMBER}{_UNIT}?"
+_FIGURE = re.compile(
+    rf"(?<!\w)(?:\d{{4}}-\d{{2}}-\d{{2}}(?![\d-])|{_AMOUNT}(?:[ \t]*[–—-][ \t]*{_AMOUNT})?)",
     re.IGNORECASE,
 )
 
 
-def _normalize(text: str) -> str:
-    s = (text or "").lower()
-    s = re.sub(r"\s+", " ", s)
-    s = s.replace(",", "").replace("$", "")
-    s = re.sub(r"\s?%", "%", s)
-    for full, short in (("billion", "b"), ("million", "m"), ("trillion", "t"), ("thousand", "k")):
-        s = re.sub(rf"\b{full}s?\b", short, s)
-    return s
-
-
-def _token_value(token: str):
-    """Return (magnitude, unit) where unit is 'currency' or 'percent'."""
-    t = token.strip().lower().replace("$", "").replace(",", "").strip()
-    is_pct = "%" in t
-    t = t.replace("%", "").replace("-", "").strip()
-    mult = 1.0
-    for word, val in _MULT_ORDER:
-        if t.endswith(word):
-            mult = val
-            t = t[: -len(word)].strip()
-            break
+def safe_http_url(value: str) -> str:
+    if not isinstance(value, str) or len(value) > 2048:
+        return ""
+    if not value or any(ord(c) < 33 or ord(c) == 127 or c.isspace() for c in value) or "\\" in value:
+        return ""
     try:
-        v = float(t)
+        parsed = urlsplit(value)
+        if (parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username
+                and not parsed.password and (parsed.port is None or 0 < parsed.port <= 65535)):
+            return value
     except ValueError:
-        return None
-    return (v * mult, "percent" if is_pct else "currency")
+        pass
+    return ""
 
 
-def extract_figures(text: str) -> list:
-    """Return raw figure tokens: currency, percentages, and multiplier-word amounts."""
-    out = []
-    for m in _NUM_TOKEN_RE.findall(text or ""):
-        token = m.strip()
-        if token and ("$" in token or "%" in token or _MULT_WORD.search(token)):
-            out.append(token)
-    return out
-
-
-def _extract_figure_values(text: str) -> list:
-    values = []
-    for token in extract_figures(text):
-        v = _token_value(token)
-        if v is not None:
-            values.append(v)
-    return values
-
-
-def _matches(fig, corpus) -> bool:
-    v, unit = fig
-    av = abs(v)
-    for cv, cunit in corpus:
-        if unit != cunit:
-            continue
-        acv = abs(cv)
-        if abs(av - acv) <= max(1e-9, acv * 1e-6):
-            return True
-    return False
+def extract_figures(text: str) -> list[str]:
+    """Index figures for display. The full evidence statement is authoritative."""
+    return list(dict.fromkeys(match.group() for match in _FIGURE.finditer(text or "")))
 
 
 def verify_grounding(summary: str, why_it_matters: str, figures_cited: list, source_text: str):
-    """Return (grounded: bool, ungrounded_figures: list)."""
-    corpus_norm = _normalize(source_text)
-    corpus_figures = _extract_figure_values(source_text)
-    ungrounded: list[str] = []
-
-    # 1. Strict check on self-declared figures: numeric figures are matched by
-    #    unit+value (so formatting variants are tolerated and unit/scale mistakes
-    #    are caught); non-numeric entries fall back to normalized substring.
-    for f in figures_cited:
-        s = str(f)
-        vals = [v for v in (_token_value(t) for t in extract_figures(s)) if v is not None]
-        if vals:
-            if not all(_matches(v, corpus_figures) for v in vals):
-                ungrounded.append(s)
-        elif _normalize(s) not in corpus_norm:
-            ungrounded.append(s)
-
-    # 2. Independent backstop on currency/percentage figures the model may not
-    #    have declared (unit-aware magnitude match).
-    for token in extract_figures(f"{summary} {why_it_matters}"):
-        v = _token_value(token)
-        if v is not None and not _matches(v, corpus_figures):
-            ungrounded.append(token)
-
-    return (not ungrounded, sorted(set(ungrounded)))
+    """Accept an exact source statement and an approved editorial follow-up."""
+    failures = []
+    statement = " ".join(summary.split())
+    statements = [" ".join(s.split()) for s in source_text.splitlines() if s.strip()]
+    if not statement or statement not in statements:
+        failures.append(summary or "no source statement")
+    if why_it_matters not in {line for options in FOLLOW_UPS.values() for line in options}:
+        failures.append(why_it_matters or "no approved follow-up")
+    permitted_figures = extract_figures(statement) if statement in statements else []
+    for figure in figures_cited:
+        if figure not in permitted_figures:
+            failures.append(figure)
+    return not failures, failures

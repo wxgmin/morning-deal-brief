@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="run-token" content="{{ run_token }}">
+  <title>Morning Deal Brief · Preferences</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='markets.css') }}">
+  <script defer src="{{ url_for('static', filename='settings.js') }}"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to preferences</a>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="wordmark" href="{{ url_for('index') }}"><span class="wordmark-rule" aria-hidden="true"></span><span class="wordmark-name">Morning Deal Brief</span></a>
+    <nav class="desk-nav" aria-label="Workspace">
+      <a href="{{ url_for('index') }}">Brief</a>
+      <a href="{{ url_for('index') }}#editions">Archive</a>
+      <a href="{{ url_for('settings_view') }}" aria-current="page">Preferences</a>
+    </nav>
+  </div>
+</header>
+<main class="set" id="main" tabindex="-1" data-settings
+      data-profile-url="{{ url_for('api_profile') }}" data-search-url="{{ url_for('company_search') }}"
+      data-home-url="{{ url_for('index') }}">
+  <header class="set-head">
+    <h1>Brief preferences</h1>
+    <p class="set-lede">Choose what gets collected for your next brief. Saved preferences also apply to scheduled runs.</p>
+    {% if not managed %}<p class="notice">The configured coverage file controls issuer filings, issuer news and session closes. The watchlist below controls the market snapshot.</p>{% endif %}
+  </header>
+  <noscript><p class="notice">Enable JavaScript to edit and save your preferences.</p></noscript>
+  <div class="settings-layout">
+    <nav class="settings-nav" aria-label="Preference sections">
+      <a href="#setup">Quick setup</a><a href="#watchlist">Watchlist</a><a href="#markets">Markets</a><a href="#feeds">News feeds</a>
+      <a href="#calendar">Calendar</a><a href="#alerts">Alerts</a><a href="#sections">Brief layout</a><a href="#chatgpt">ChatGPT</a>
+    </nav>
+    <div class="settings-body" data-editor hidden>
+      <section class="settings-section" id="setup" aria-labelledby="setup-heading" data-apply-url="{{ url_for('apply_setup') }}">
+        <h2 id="setup-heading">Quick setup</h2>
+        <p>Start from your job. A setup re-orders the brief, switches on the right markets, data and feeds, and
+          re-weights headlines. It never removes your watchlist or anything you added. Nothing is saved until you press Save.</p>
+        <div class="role-grid" role="group" aria-label="Desk setups">
+          {% for rid, role in catalog.ROLE_PRESETS.items() %}
+          <button type="button" class="role-card" data-role="{{ rid }}" aria-describedby="role-{{ rid }}">
+            <b>{{ role.label }}</b><span id="role-{{ rid }}">{{ role.blurb }}</span>
+          </button>
+          {% endfor %}
+        </div>
+        <h3>Starter watchlists</h3>
+        <p class="snap-sub">Replaces the watchlist below. You can add or remove names afterwards.</p>
+        <div class="set-row">
+          {% for pid, preset in catalog.WATCHLIST_PRESETS.items() %}
+          <button type="button" class="btn" data-preset="{{ pid }}">{{ preset.label }}</button>
+          {% endfor %}
+        </div>
+        <div class="setup-result" data-setup-result role="status" aria-live="polite" hidden></div>
+      </section>
+      <section class="settings-section" id="watchlist" aria-labelledby="watchlist-heading">
+        <h2 id="watchlist-heading">Watchlist</h2>
+        <p>Set one focus company and tag peers to prioritize their disclosures.</p>
+        <form class="settings-search" data-search>
+          <label for="company-search">Company or ticker</label>
+          <div class="set-row"><input id="company-search" type="search" name="q" minlength="2" maxlength="80" placeholder="Search by name or ticker" required>
+            <button type="submit" class="btn">Search</button></div>
+        </form>
+        <p class="set-status" data-search-status role="status"></p>
+        <ul class="set-hit" data-search-results hidden></ul>
+        <details class="set-group">
+          <summary>Add a ticker manually</summary>
+          <form class="settings-form" data-add-company>
+            <label>Ticker<input name="ticker" maxlength="15" pattern="[A-Za-z0-9][A-Za-z0-9.\-]{0,14}" placeholder="AAPL or 7203.T" required></label>
+            <label>Company name<input name="name" maxlength="100" placeholder="Optional"></label>
+            <button type="submit" class="btn">Add ticker</button>
+          </form>
+        </details>
+        <p class="set-status" data-watch-status role="status"></p>
+        <ul data-watchlist class="settings-list"></ul>
+        <label class="set-field">Coverage label<input data-sector spellcheck="false" maxlength="120" placeholder="Optional desk or sector name"></label>
+      </section>
+      <section class="settings-section" id="markets" aria-labelledby="markets-heading">
+        <h2 id="markets-heading">Markets</h2>
+        <p>Regions control the regional boards. Globally tracked instruments stay available.</p>
+        <div class="set-options">
+          {% for market in catalog.MARKETS %}
+          <label><input type="checkbox" name="market" value="{{ market.id }}">{{ market.label }}</label>
+          {% endfor %}
+        </div>
+        <h3>Instruments</h3>
+        <p>Pin any enabled instrument to the market heartbeat strip.</p>
+        <div data-instruments>
+          {% for group in catalog.GROUPS %}
+          <details class="set-group" data-group="{{ group.id }}" {% if loop.first %}open{% endif %}>
+            <summary>{{ group.label }}</summary>
+            <div class="instrument-list" data-group-items></div>
+          </details>
+          {% endfor %}
+        </div>
+        <details class="set-group">
+          <summary>Add an instrument</summary>
+          <form class="settings-form" data-add-instrument>
+            <label>Yahoo Finance symbol<input name="symbol" maxlength="24" placeholder="^FTSE" required></label>
+            <label>Label<input name="label" maxlength="60" placeholder="Optional"></label>
+            <label>Board<select name="group">{% for group in catalog.GROUPS %}<option value="{{ group.id }}">{{ group.label }}</option>{% endfor %}</select></label>
+            <label>Region<select name="region"><option value="">Global</option>{% for market in catalog.MARKETS %}<option value="{{ market.id }}">{{ market.label }}</option>{% endfor %}</select></label>
+            <label>Quote type<select name="kind"><option value="price">Price</option><option value="index">Index</option><option value="yield">Yield</option><option value="vol">Volatility index</option><option value="fx">Currency</option><option value="etf">ETF</option><option value="crypto">Crypto</option></select></label>
+            <button type="submit" class="btn">Add instrument</button>
+          </form>
+        </details>
+        <p class="set-status" data-instrument-status role="status"></p>
+      </section>
+      <section class="settings-section" id="feeds" aria-labelledby="feeds-heading">
+        <h2 id="feeds-heading">News feeds</h2>
+        <p>Select sources for the market headlines and add public RSS or Atom feeds.</p>
+        <ul data-feeds class="settings-list"></ul>
+        <form class="settings-form" data-add-feed>
+          <label>Feed name<input name="label" maxlength="90" required></label>
+          <label>HTTPS feed URL<input name="url" type="url" maxlength="2048" required></label>
+          <button type="submit" class="btn">Add feed</button>
+        </form>
+        <p class="set-status" data-feed-status role="status"></p>
+        <div class="set-row">
+          <label class="set-field">Headline limit<input type="number" data-news-limit min="3" max="40"></label>
+          <label class="set-field">Lookback in hours<input type="number" data-news-lookback min="2" max="168"></label>
+        </div>
+        <details class="set-group"><summary>Headline priorities</summary><div class="set-weights">
+          {% for key, value in catalog.THEMES.items() %}<label>{{ value.label }}<input type="number" min="0" max="2" step=".05" data-theme="{{ key }}"></label>{% endfor %}
+        </div></details>
+      </section>
+      <section class="settings-section" id="calendar" aria-labelledby="calendar-heading">
+        <h2 id="calendar-heading">Calendar</h2>
+        <p>Choose markets, the calendar window and minimum impact.</p>
+        <div class="set-options">
+          {% for country in catalog.CALENDAR_COUNTRIES %}<label><input type="checkbox" name="calendar-country" value="{{ country }}">{{ country }}</label>{% endfor %}
+        </div>
+        <div class="set-row">
+          <label class="set-field">Minimum impact<select data-impact><option>Low</option><option>Medium</option><option>High</option></select></label>
+          <label class="set-field">Calendar days<input type="number" min="1" max="30" data-horizon></label>
+        </div>
+        <div class="set-options">
+          <label><input type="checkbox" data-earnings> Earnings announcements</label>
+          <label><input type="checkbox" data-auctions> US Treasury auctions</label>
+        </div>
+      </section>
+      <section class="settings-section" id="alerts" aria-labelledby="alerts-heading">
+        <h2 id="alerts-heading">Alerts</h2>
+        <p>Alerts appear at the top of the brief. To get them on your phone, set NTFY_TOPIC in .env and schedule
+          <code>python run.py --alerts</code> every 15 minutes; each alert is sent once per day.</p>
+        <div class="set-options"><label><input type="checkbox" data-alerts-enabled> Show alerts</label></div>
+        <div class="set-row">
+          <label class="set-field">Watchlist move threshold (%)<input type="number" min="0.5" max="50" step="0.5" data-alerts-move></label>
+          <label class="set-field">Headline keywords (comma-separated)<input type="text" maxlength="400" data-alerts-keywords placeholder="e.g. tender offer, guidance, Fed"></label>
+        </div>
+      </section>
+      <section class="settings-section" id="chatgpt" aria-labelledby="chatgpt-heading">
+        <h2 id="chatgpt-heading">ChatGPT</h2>
+        <p>Connect an eligible ChatGPT plan to prioritize public market headlines, potential catalysts and market implications when you collect a brief. Scheduled collection on this machine also uses the connected plan.</p>
+        {% if auth_result == 'first' %}<p role="status"><b>You're using your ChatGPT plan.</b> You can manage this app's usage in ChatGPT settings.</p>
+        {% elif auth_result == 'connected' %}<p role="status">ChatGPT is connected.</p>
+        {% elif auth_result == 'denied' %}<p role="status">ChatGPT permission was declined.</p>
+        {% elif auth_result == 'ineligible' %}<p role="status">ChatGPT plan usage is unavailable for this account or workspace.</p>
+        {% elif auth_result == 'disconnected' %}<p role="status">ChatGPT was signed out.</p>
+        {% elif auth_result == 'revoke_unconfirmed' %}<p role="status">Signed out locally. To confirm disconnection, remove access in ChatGPT settings.</p>
+        {% elif auth_result %}<p role="status">ChatGPT sign-in could not be completed. You can retry or collect a brief with the built-in market read.</p>{% endif %}
+        {% if not loopback %}
+          <p>Open Preferences at <a href="{{ loopback_settings }}">127.0.0.1</a> to connect an account.</p>
+        {% elif not chatgpt.available %}
+          <p>ChatGPT sign-in requires access to this user's operating system credential store.</p>
+        {% else %}
+          {% for account in chatgpt.accounts %}
+            {% if account.id == chatgpt.active and account.connected %}<p>Connected as <b>{{ account.label }}</b>.</p>{% endif %}
+          {% endfor %}
+          <div class="set-row" data-chatgpt-actions>
+            <button type="button" class="btn btn-primary" data-oai-siwc-button data-chatgpt-url="{{ url_for('chatgpt_start') }}">Continue with ChatGPT</button>
+            {% for account in chatgpt.accounts %}
+              <button type="button" class="btn" data-oai-siwc-button data-chatgpt-url="{{ url_for('chatgpt_start') }}" data-chatgpt-client="{{ account.id }}">Continue as {{ account.label }} ({{ account.id[-6:] }})</button>
+            {% endfor %}
+            {% if chatgpt.active %}<button type="button" class="btn" data-chatgpt-url="{{ url_for('chatgpt_signout') }}">Sign out</button>{% endif %}
+          </div>
+        {% endif %}
+        <p><a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener noreferrer">Manage usage in ChatGPT</a></p>
+        <p class="set-status" data-chatgpt-status role="status"></p>
+      </section>
+      <section class="settings-section" id="sections" aria-labelledby="sections-heading">
+        <h2 id="sections-heading">Brief layout</h2>
+        <p>Show or hide sections and change the order they appear.</p>
+        <ol data-section-order class="set-order"></ol>
+      </section>
+    </div>
+  </div>
+  <footer class="set-savebar">
+    <p class="set-status" data-save-status role="status">Loading preferences…</p>
+    <button type="button" class="btn" data-save disabled>Save preferences</button>
+    <button type="button" class="btn btn-primary" data-save-collect disabled>Save &amp; collect</button>
+  </footer>
+</main>
+</body>
+</html>

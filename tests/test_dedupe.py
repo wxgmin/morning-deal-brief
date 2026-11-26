@@ -1,3 +1,5 @@
+import pytest
+
 from src import dedupe
 from src.models import Event, RawItem
 
@@ -31,3 +33,22 @@ def test_dedupe_different_companies_kept():
     b = _ev("IEX", "IDEX announces acquisition", "url2")
     out = dedupe.dedupe([a, b])
     assert len(out) == 2
+
+
+@pytest.mark.parametrize(("first", "second"), [
+    ("Graco announces acquisition of Acme for $500M", "Graco completes acquisition of Acme for $500M"),
+    ("Graco reports acquisition growth of -5%", "Graco reports acquisition growth of 5%"),
+    ("Fitch downgrades Graco to BBB", "Fitch downgrades Graco to BBB-"),
+])
+def test_reused_article_url_does_not_hide_material_updates(first, second):
+    url = "https://news.example.org/live/coverage"
+    events = [_ev("GGG", first, url), _ev("GGG", second, url + "?utm_source=wire")]
+    assert dedupe.dedupe(events) == events
+
+
+def test_unchanged_story_from_two_feeds_dedupes_across_midnight():
+    url = "https://news.example.org/releases/acme"
+    a = _ev("GGG", "Graco announces $500M acquisition of Acme", url)
+    b = _ev("GGG", "Graco announces $500M acquisition of Acme", url + "?utm_medium=rss")
+    b.item.published = "2026-11-18"
+    assert dedupe.dedupe([a, b]) == [a]

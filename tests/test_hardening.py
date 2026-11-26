@@ -11,12 +11,12 @@ def test_guardrail_rejects_currency_vs_percent():
     assert not grounded
 
 
-def test_guardrail_accepts_billion_abbreviation():
+def test_guardrail_preserves_original_wording_and_units():
     source = "The company announced a $1.2B deal."
     grounded, _ = guardrails.verify_grounding(
         "Announced a $1.2 billion deal.", "Significant.", figures_cited=[], source_text=source,
     )
-    assert grounded
+    assert not grounded
 
 
 def test_detect_operating_not_rating():

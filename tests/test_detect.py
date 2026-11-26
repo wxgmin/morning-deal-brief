@@ -24,7 +24,7 @@ def test_detect_edgar_form_map():
 
 
 def test_detect_edgar_8k_keyword(monkeypatch):
-    monkeypatch.setattr(detect.edgar_c, "fetch_text", lambda *a, **k: "Item 2.02 results of operations")
+    monkeypatch.setattr(detect.edgar, "fetch_text", lambda *a, **k: "Item 2.02 results of operations")
     item = RawItem(
         source="edgar", company="Graco", ticker="GGG", role="client",
         title="x", url="u", published="2026-11-17", form="8-K",

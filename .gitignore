@@ -10,4 +10,8 @@ __pycache__/
 
 # Local caches / scratch
 .cache/
+var/
 *.log
+
+*.chatgpt.enc
+*.chatgpt.enc.lock

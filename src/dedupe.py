@@ -1,69 +1,61 @@
-"""Deduplicate the same story reported by multiple outlets."""
+"""Conservative story identity with same-issuer and date guards."""
 from __future__ import annotations
 
-from rapidfuzz import fuzz
+import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from .models import Event
+from .guardrails import safe_http_url
 
-
-def _norm(text: str) -> str:
-    return " ".join((text or "").lower().split())
-
-
-def _richness(ev: Event) -> int:
-    return len(ev.source_text or "") + len(ev.item.summary or "")
+_SUFFIX = re.compile(r"[, ]+\b(?:inc|incorporated|corp|corporation|ltd|limited|llc|plc)\.?$")
+_TRACKING = {"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "fbclid"}
 
 
-def _same_co(a: Event, b: Event) -> bool:
-    ta = (a.item.ticker or "").upper()
-    tb = (b.item.ticker or "").upper()
-    if ta and tb:
-        return ta == tb
-    if ta or tb:
+def _url_key(value):
+    if not safe_http_url(value):
+        return ""
+    url = urlsplit(value)
+    query = urlencode([(k, v) for k, v in parse_qsl(url.query, keep_blank_values=True)
+                       if k.lower() not in _TRACKING])
+    return urlunsplit(("", url.netloc.lower(), url.path or "/", query, ""))
+
+
+def _headline(value):
+    return _SUFFIX.sub("", " ".join(value.casefold().split()).rstrip("."))
+
+
+def _same_story(a, b):
+    x, y = a.item, b.item
+    if (x.ticker or x.company).casefold() != (y.ticker or y.company).casefold():
         return False
-    na = _norm(a.item.company)
-    nb = _norm(b.item.company)
-    return bool(na and nb and na == nb)
+    if x.source == "edgar" and y.source == "edgar":
+        return bool(x.accession and x.accession == y.accession and a.event_type == b.event_type
+                    and x.extra.get("exhibit") == y.extra.get("exhibit"))
+    if x.source == "market" or y.source == "market":
+        return x.source == y.source and x.published == y.published
+    if x.source != "rss" or y.source != "rss" or a.event_type != b.event_type:
+        return False
+    # A story URL can carry revised terms or a new headline as a deal progresses.
+    if _headline(x.title) != _headline(y.title):
+        return False
+    key = _url_key(x.url)
+    return x.published == y.published or bool(key and key == _url_key(y.url))
+
+
+def _quality(event):
+    return (event.item.source == "edgar", event.item.extra.get("publisher_type") == "press",
+            len(event.source_text or ""), len(event.item.summary or ""))
 
 
 def dedupe(events: list, threshold: int = 82) -> list:
-    """Greedy single-pass clustering by company + headline similarity.
-
-    Items are kept by richness (longest available text), and duplicates are recorded
-    in ``also_reported_by`` with their source URL.
-    """
-    if not events:
-        return []
-
-    kept: list[Event] = []
-    for ev in events:
-        matched = False
-        for k in kept:
-            # Distinct EDGAR filings are never duplicates (they have unique accessions;
-            # only merge when both accessions are present and equal).
-            if ev.item.source == "edgar" and k.item.source == "edgar":
-                if not (ev.item.accession and k.item.accession) or ev.item.accession != k.item.accession:
-                    continue
-            if not _same_co(ev, k):
-                continue
-
-            ratio = fuzz.token_set_ratio(_norm(ev.item.title), _norm(k.item.title))
-            if ratio >= threshold:
-                if _richness(ev) > _richness(k):
-                    # k loses; record its URL, then adopt ev's fields.
-                    if k.item.url and k.item.url not in k.also_reported_by:
-                        k.also_reported_by.append(k.item.url)
-                    k.item = ev.item
-                    k.source_text = ev.source_text
-                    k.event_type = ev.event_type
-                    k.confidence = ev.confidence
-                    k.magnitude = ev.magnitude
-                else:
-                    # ev loses; record ev's URL (never its own).
-                    if ev.item.url and ev.item.url != k.item.url and ev.item.url not in k.also_reported_by:
-                        k.also_reported_by.append(ev.item.url)
-                matched = True
-                break
-        if not matched:
-            kept.append(ev)
+    """Keep the best evidence for each high-confidence match and retain linked sources."""
+    kept = []
+    for event in sorted(events, key=_quality, reverse=True):
+        match = next((k for k in kept if _same_story(event, k)), None)
+        if match is None:
+            kept.append(event)
+        else:
+            links = [event.item.url, *event.also_reported_by]
+            match.also_reported_by.extend(
+                dict.fromkeys(url for url in links if url and url != match.item.url and url not in match.also_reported_by)
+            )
     return kept

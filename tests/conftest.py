@@ -11,6 +11,13 @@ from src.config import AppConfig, CoverageConfig, Settings  # noqa: E402
 from src.models import Company  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def no_live_snapshot(monkeypatch):
+    """Unit tests never reach the network for the market snapshot; snapshot tests pass data explicitly."""
+    from src import main
+    monkeypatch.setattr(main, "_safe_snapshot", lambda cfg: None)
+
+
 @pytest.fixture
 def cfg(tmp_path):
     client = Company("Graco Inc.", "GGG", role="client")

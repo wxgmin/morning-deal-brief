@@ -21,38 +21,26 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 OLLAMA_BASE = "http://localhost:11434/v1"
 LMSTUDIO_BASE = "http://localhost:1234/v1"
 
-# (judgment model, classification model) defaults per provider.
+# Lightweight models are enough for bounded evidence selection.
 DEFAULT_MODELS = {
-    "openai": ("gpt-4o", "gpt-4o-mini"),
-    "anthropic": ("claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"),
-    "gemini": ("gemini-2.5-pro", "gemini-2.5-flash"),
-    "openrouter": (None, None),
-    "local": (None, None),
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-haiku-5-5",
+    "gemini": "gemini-2.5-flash",
 }
 
-_FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
+_FENCE_RE = re.compile(r"^```(?:json)?\s*([\s\S]*?)\s*```$", re.IGNORECASE)
 
 
 def _extract_json(text: str) -> dict:
-    """Return a dict from an LLM response, tolerating fences/arrays. Raises if invalid."""
+    """Accept only one bounded JSON object."""
     text = (text or "").strip()
-    candidates = [text]
-    start, end = text.find("{"), text.rfind("}")
-    if start != -1 and end > start:
-        candidates.append(text[start : end + 1])
-
-    for cand in candidates:
-        cand = _FENCE_RE.sub("", cand.strip()).strip()
-        try:
-            obj = json.loads(cand)
-        except Exception:
-            continue
-        if isinstance(obj, dict):
-            return obj
-        if isinstance(obj, list) and obj and isinstance(obj[0], dict):
-            return obj[0]
-
-    raise ValueError("LLM did not return a valid JSON object")
+    if len(text) > 2048:
+        raise ValueError("Model output exceeded size limit")
+    fence = _FENCE_RE.fullmatch(text)
+    obj = json.loads(fence.group(1) if fence else text)
+    if not isinstance(obj, dict):
+        raise ValueError("Model did not return one JSON object")
+    return obj
 
 
 class NoneProvider:
@@ -69,7 +57,7 @@ class OpenAICompatProvider:
         self.name = name
         from openai import OpenAI
 
-        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=120.0, max_retries=2)
+        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=8.0, max_retries=0)
 
     def chat_json(self, system, user, model):
         resp = self._client.chat.completions.create(
@@ -88,12 +76,12 @@ class AnthropicProvider:
         self.name = "anthropic"
         from anthropic import Anthropic
 
-        self._client = Anthropic(api_key=api_key, timeout=120.0, max_retries=2)
+        self._client = Anthropic(api_key=api_key, timeout=8.0, max_retries=0)
 
     def chat_json(self, system, user, model):
         resp = self._client.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=128,
             system=system + "\n\nRespond with a single JSON object and nothing else.",
             messages=[{"role": "user", "content": user}],
         )
@@ -110,6 +98,8 @@ def _auto_detect(s) -> str:
         return "gemini"
     if s.openai_api_key:
         return "openai"
+    if s.openrouter_api_key:
+        return "openrouter"
     if s.llm_base_url:
         return "local"
     if s.llm_api_key:
@@ -137,7 +127,7 @@ def get_provider(cfg):
         key = s.gemini_api_key or generic_key
         return OpenAICompatProvider("gemini", key, base_url=GEMINI_OPENAI_BASE) if key else NoneProvider()
     if p == "openrouter":
-        key = generic_key or s.openai_api_key
+        key = s.openrouter_api_key or generic_key
         return OpenAICompatProvider("openrouter", key, base_url=OPENROUTER_BASE) if key else NoneProvider()
     if p in ("local", "lmstudio"):
         base = s.llm_base_url or (LMSTUDIO_BASE if p == "lmstudio" else OLLAMA_BASE)
@@ -147,5 +137,5 @@ def get_provider(cfg):
     return NoneProvider()
 
 
-def models_for(provider_name: str):
-    return DEFAULT_MODELS.get(provider_name, (None, None))
+def default_model(provider_name: str):
+    return DEFAULT_MODELS.get(provider_name)

@@ -8,38 +8,42 @@ sector: "Industrial / Fluid Handling & Flow Control"
 client:
   name: "Graco Inc."
   ticker: "GGG"
-  cik: ""
+  cik: "0000042888"
 
 peers:
   - name: "IDEX Corporation"
     ticker: "IEX"
-    cik: ""
+    cik: "0000832101"
   - name: "Nordson Corporation"
     ticker: "NDSN"
-    cik: ""
+    cik: "0000072331"
   - name: "Lincoln Electric Holdings"
     ticker: "LECO"
-    cik: ""
+    cik: "0000059527"
   - name: "Snap-on Incorporated"
     ticker: "SNA"
-    cik: ""
+    cik: "0000091440"
   - name: "Donaldson Company"
     ticker: "DCI"
-    cik: ""
+    cik: "0000029644"
   - name: "Dover Corporation"
     ticker: "DOV"
-    cik: ""
+    cik: "0000029905"
   - name: "Ingersoll Rand"
     ticker: "IR"
-    cik: ""
+    cik: "0001699150"
   - name: "Fortive Corporation"
     ticker: "FTV"
-    cik: ""
+    cik: "0001659166"
 
 # Event-type weights for the banking angle (higher = more relevant to coverage).
 event_weights:
+  bankruptcy: 1.2
+  financial_reporting: 1.05
+  impairment: 0.85
   M&A: 1.0
   activist: 0.95
+  ownership: 0.35
   rating_change: 0.9
   financing: 0.85
   management_change: 0.8
@@ -54,24 +58,12 @@ relevance_weights:
   peer: 0.8
   sector: 0.5
 
-# News / press-release RSS feeds (live enrichment; RSS is not backfillable).
-# Add a per-ticker Yahoo Finance feed and any company press feeds here.
+# Publisher RSS feeds are preferred. These Google News feeds are a demo fallback.
+# Add verified company IR endpoints with type: press and ticker: SYMBOL.
 rss_feeds:
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=GGG&region=US&lang=en-US"
+  - url: "https://news.google.com/rss/search?q=Graco+Inc+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"
     type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=IEX&region=US&lang=en-US"
+  - url: "https://news.google.com/rss/search?q=%28IDEX+Corporation+OR+Nordson+OR+Lincoln+Electric+OR+Snap-on%29+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"
     type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=NDSN&region=US&lang=en-US"
-    type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=LECO&region=US&lang=en-US"
-    type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=SNA&region=US&lang=en-US"
-    type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=DCI&region=US&lang=en-US"
-    type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=DOV&region=US&lang=en-US"
-    type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=IR&region=US&lang=en-US"
-    type: news
-  - url: "https://feeds.finance.yahoo.com/rss/2.0/headline?s=FTV&region=US&lang=en-US"
+  - url: "https://news.google.com/rss/search?q=%28Donaldson+Company+OR+Dover+Corporation+OR+Ingersoll+Rand+OR+Fortive%29+when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"
     type: news

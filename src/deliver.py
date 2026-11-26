@@ -1,150 +1,223 @@
-"""Deliver the brief to Slack and/or email (both/either configurable, isolated)."""
+"""TLS delivery and a durable receipt scoped to each published edition."""
 from __future__ import annotations
 
+import json
 import logging
 import smtplib
 import ssl
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from urllib.parse import urlsplit
 
 import requests
 
+from .archive import _atomic_write, day_path
+from . import snapshot_render
+from .brief import deals_enabled, recovery_note
+from .guardrails import safe_http_url
+
 logger = logging.getLogger(__name__)
 
-_SLACK_MAX_BLOCKS = 50
-_SLACK_MAX_SECTION_CHARS = 3000
+
+class RetryableDeliveryError(RuntimeError):
+    """The transport explicitly rejected the attempt before acceptance."""
 
 
-def _event_label(event_type: str) -> str:
-    return event_type.replace("_", " ").title()
-
-
-def _slack_escape(text) -> str:
-    return str(text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _safe_http_url(url: str) -> str:
-    url = (url or "").strip()
-    try:
-        return url if urlsplit(url).scheme.lower() in ("http", "https") else ""
-    except Exception:
-        return ""
-
-
-def _slack_link(url: str, label: str) -> str:
-    url = _safe_http_url(url)
+def _slack_link(value, label):
+    url = safe_http_url(value)
     if not url:
-        return _slack_escape(label)
-    url = url.replace("<", "%3C").replace(">", "%3E").replace("|", "%7C")
-    return f"<{url}|{_slack_escape(label)}>"
+        return label
+    url = url.replace("&", "&amp;").replace("<", "%3C").replace(">", "%3E").replace("|", "%7C")
+    return f"<{url}|{label}>"
 
 
-def _post_slack(webhook_url: str, blocks: list, text: str) -> None:
-    for i in range(0, len(blocks), _SLACK_MAX_BLOCKS):
-        chunk = blocks[i : i + _SLACK_MAX_BLOCKS]
-        payload = {"blocks": chunk}
-        if i == 0:
-            payload["text"] = text
-        resp = requests.post(webhook_url, json=payload, timeout=30)
-        resp.raise_for_status()
-        # Slack's incoming webhook returns HTTP 200 even on app-level errors.
-        body = resp.text.strip()
-        if body and body != "ok":
-            raise RuntimeError(f"Slack webhook error: {body}")
+def _plain(text):
+    return {"type": "section", "text": {"type": "plain_text", "text": text[:3000], "emoji": False}}
 
 
-def send_slack(webhook_url: str, date_str: str, brief_items, price_moves) -> None:
-    blocks = [
-        {"type": "header", "text": {"type": "plain_text", "text": f"Morning Deal Brief — {date_str}"}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": "*What matters today*"}},
-    ]
+def send_slack(webhook_url: str, date_str: str, brief_items, price_moves, meta=None) -> None:
+    if not safe_http_url(webhook_url) or not webhook_url.startswith("https://"):
+        raise RetryableDeliveryError("Slack requires an HTTPS webhook")
+    if urlsplit(webhook_url).hostname not in {"hooks.slack.com", "hooks.slack-gov.com"}:
+        raise RetryableDeliveryError("Slack webhook host is invalid")
+    meta = meta or {}
+    title = f"Morning Deal Brief · {date_str}"
+    fallback = title
+    blocks = [{"type": "header", "text": {"type": "plain_text", "text": title}}]
+    if note := recovery_note(meta):
+        fallback += "\n" + note
+        blocks.append(_plain(note))
+    if meta.get("outcome") != "complete":
+        message = "Source coverage is " + meta.get("outcome", "unverified") + "."
+        fallback += "\n" + message
+        blocks.append(_plain(message))
+    snap = meta.get("snapshot")
+    if snap:
+        snap_blocks, snap_text = snapshot_render.slack_blocks(snap)
+        blocks.extend(snap_blocks)
+        if snap_text:
+            fallback += "\n\n" + snap_text[:1800]
+        if not deals_enabled(meta):
+            brief_items, price_moves = [], []
+    if not brief_items and (not snap or deals_enabled(meta)):
+        blocks.append(_plain("No events published for this edition."))
+    for item in brief_items[:10]:
+        heading = f"{item.rank}. {item.company[:220]} · {item.event_type.replace('_', ' ').title()}"
+        blocks.append(_plain(f"{heading}\n{item.summary}\nAnalyst follow-up: {item.why_it_matters}"))
+        source = safe_http_url(item.source_url)
+        if source:
+            blocks.append({"type": "context", "elements": [
+                {"type": "plain_text", "text": (item.publisher or "Source")[:180]},
+                {"type": "mrkdwn", "text": _slack_link(source, "Open evidence")},
+            ]})
+        # Notifications and screen readers may use only this plain-text fallback.
+        # Include the entire excerpt and citation, or just the story heading.
+        entry = f"\n{heading}"
+        excerpt = f"{entry}\n{item.summary}\n{source}" if source else entry
+        if len(fallback) + len(excerpt) <= 3900:
+            fallback += excerpt
+        elif len(fallback) + len(entry) <= 3900:
+            fallback += entry
+    if price_moves:
+        session = price_moves[0].date
+        market_lines = []
+        for move in price_moves[:20]:
+            change = "—" if move.pct_change is None else f"{move.pct_change:+.2f}%"
+            provider = move.evidence.get("provider", "Source")
+            link = _slack_link(move.evidence.get("source_url"), "data")
+            market_lines.append(f"{move.ticker} {change} · {provider} · {link}")
+        if len(price_moves) > 20:
+            market_lines.append("Additional symbols are in the archived edition.")
+        # Bound each section on whole lines so a source link is never clipped.
+        blocks.append(_plain(f"Coverage prices · {session}"))
+        for start in range(0, len(market_lines), 4):
+            lines = [line for line in market_lines[start:start + 4] if len(line) < 730]
+            if lines:
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}})
+    try:
+        response = requests.post(webhook_url, timeout=(4, 12), allow_redirects=False, json={
+            "text": fallback, "mrkdwn": False, "blocks": blocks, "unfurl_links": False, "unfurl_media": False,
+        })
+    except requests.ConnectTimeout:
+        raise RetryableDeliveryError("Slack connection timed out before submission") from None
+    except requests.RequestException:
+        raise RuntimeError("Slack acknowledgement was not received") from None
+    if response.status_code == 200 and response.text.strip() == "ok":
+        return
+    if 400 <= response.status_code < 500:
+        raise RetryableDeliveryError(f"Slack rejected the request (HTTP {response.status_code})")
+    raise RuntimeError(f"Slack acknowledgement uncertain (HTTP {response.status_code})")
 
-    if not brief_items:
-        blocks.append(
-            {"type": "section", "text": {"type": "mrkdwn", "text": "_No coverage-relevant events met the threshold._"}}
-        )
-    for b in brief_items:
-        text = (
-            f"*{b.rank}. {_slack_escape(b.company)} ({_slack_escape(b.ticker)}) — {_event_label(b.event_type)}*\n"
-            f"{_slack_escape(b.summary)}\n"
-            f"> *Why it matters:* {_slack_escape(b.why_it_matters)}"
-        )[: _SLACK_MAX_SECTION_CHARS]
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": text}})
-        if b.source_url:
-            blocks.append(
-                {"type": "context", "elements": [{"type": "mrkdwn", "text": _slack_link(b.source_url, "Source")}]}
-            )
 
-    table_lines = ["*Coverage price moves*", "```"]
-    for m in price_moves:
-        flag = " *" if m.large_move else ""
-        table_lines.append(f"{m.ticker:6} {m.pct_change:+6.2f}%  {m.z_score:+5.1f}σ{flag}")
-    table_lines.append("```")
-    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(table_lines)}})
-
-    _post_slack(webhook_url, blocks, f"Morning Deal Brief — {date_str}")
-
-
-def send_email(smtp: dict, recipients: list, subject: str, body_plain: str, body_html: str) -> None:
+def send_email(smtp: dict, recipients: list, subject: str, body_plain: str, body_html: str) -> dict:
     sender = smtp.get("from") or smtp.get("user")
     if not sender:
-        raise ValueError("SMTP_FROM or SMTP_USER is required for email delivery")
-
+        raise RetryableDeliveryError("SMTP_FROM or SMTP_USER is required")
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = ", ".join(recipients)
+    # Keep the coverage distribution private and pass explicit envelope recipients.
+    msg["To"] = "undisclosed-recipients:;"
     msg.set_content(body_plain)
     msg.add_alternative(body_html, subtype="html")
-
     ctx = ssl.create_default_context()
     port = smtp.get("port", 587)
-    if port == 465:
-        server = smtplib.SMTP_SSL(smtp["host"], port, timeout=30, context=ctx)
-    else:
-        server = smtplib.SMTP(smtp["host"], port, timeout=30)
+    server = None
     try:
-        if port != 465:
+        if port == 465:
+            server = smtplib.SMTP_SSL(smtp["host"], port, timeout=12, context=ctx)
+        else:
+            server = smtplib.SMTP(smtp["host"], port, timeout=12)
             server.starttls(context=ctx)
         if smtp.get("user"):
             server.login(smtp["user"], smtp["password"])
-        server.send_message(msg)
+    except (smtplib.SMTPException, OSError):
+        if server:
+            server.close()
+        raise RetryableDeliveryError("SMTP connection, TLS or authentication was rejected") from None
+    try:
+        return server.send_message(msg, to_addrs=recipients)
+    except smtplib.SMTPRecipientsRefused as exc:
+        return exc.recipients
+    except (smtplib.SMTPSenderRefused, smtplib.SMTPDataError):
+        raise RetryableDeliveryError("SMTP envelope or DATA was rejected") from None
     finally:
-        server.quit()
+        # A failed QUIT must not erase a positive DATA acknowledgement.
+        try:
+            server.close()
+        except OSError:
+            logger.debug("SMTP connection did not close cleanly")
 
 
-def deliver(cfg, date_str: str, brief_md: str, brief_html: str, brief_items, price_moves) -> None:
+def _receipt_path(cfg, date_str):
+    return day_path(cfg.settings.archive_dir, date_str) / "delivery.json"
+
+
+def read_receipt(cfg, date_str):
+    try:
+        return json.loads(_receipt_path(cfg, date_str).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+
+
+def deliver(cfg, date_str, brief_md, brief_html, brief_items, price_moves, meta=None):
     s = cfg.settings
-    errors = []
+    meta = meta or {}
+    path = _receipt_path(cfg, date_str)
+    receipt = read_receipt(cfg, date_str) or {"revision": meta.get("revision"), "channels": {}}
+    if receipt["revision"] != meta.get("revision"):
+        raise RuntimeError("Delivery receipt refers to a different archive revision")
+    channels = receipt["channels"]
 
-    if s.delivery in ("slack", "both"):
-        if not s.slack_webhook_url:
-            logger.warning("DELIVERY includes slack but SLACK_WEBHOOK_URL is not set; skipping Slack")
-            errors.append("slack: SLACK_WEBHOOK_URL not set")
-        else:
-            try:
-                send_slack(s.slack_webhook_url, date_str, brief_items, price_moves)
-            except Exception as exc:
-                logger.warning("Slack delivery failed: %s", exc, exc_info=True)
-                errors.append(f"slack: {exc}")
+    def save():
+        receipt["updated_at"] = datetime.now(timezone.utc).isoformat()
+        _atomic_write(path, json.dumps(receipt, indent=2))
 
-    if s.delivery in ("email", "both"):
+    issues = []
+    if s.delivery in {"slack", "both"}:
+        state = channels.get("slack")
+        if state == "pending":
+            issues.append("Slack acknowledgement uncertain")
+        elif state != "accepted":
+            if not s.slack_webhook_url:
+                issues.append("Slack webhook is missing")
+            else:
+                channels["slack"] = "pending"
+                save()
+                try:
+                    send_slack(s.slack_webhook_url, date_str, brief_items, price_moves, meta)
+                    channels["slack"] = "accepted"
+                except RetryableDeliveryError as exc:
+                    channels["slack"] = "rejected"
+                    issues.append(str(exc))
+                except Exception:
+                    issues.append("Slack acknowledgement uncertain")
+                save()
+    if s.delivery in {"email", "both"}:
         if not (s.smtp_host and s.email_recipients):
-            logger.warning("DELIVERY includes email but SMTP_HOST/EMAIL_RECIPIENTS are not set; skipping email")
-            errors.append("email: SMTP_HOST/EMAIL_RECIPIENTS not set")
+            issues.append("SMTP host or recipient list is missing")
         else:
-            smtp = {
-                "host": s.smtp_host,
-                "port": s.smtp_port,
-                "user": s.smtp_user,
-                "password": s.smtp_password,
-                "from": s.smtp_from or s.smtp_user,
-            }
-            try:
-                send_email(smtp, s.email_recipients, f"Morning Deal Brief — {date_str}", brief_md, brief_html)
-            except Exception as exc:
-                logger.warning("Email delivery failed: %s", exc, exc_info=True)
-                errors.append(f"email: {exc}")
-
-    if errors:
-        raise RuntimeError("Delivery failed: " + "; ".join(errors))
+            states = channels.setdefault("email", {})
+            configured = list(dict.fromkeys(s.email_recipients))
+            recipients = [p for p in configured if states.get(p) not in {"pending", "accepted"}]
+            if any(states.get(p) == "pending" for p in configured):
+                issues.append("SMTP acknowledgement uncertain")
+            if recipients:
+                states.update(dict.fromkeys(recipients, "pending"))
+                save()
+                smtp = {"host": s.smtp_host, "port": s.smtp_port, "user": s.smtp_user,
+                        "password": s.smtp_password, "from": s.smtp_from}
+                try:
+                    refused = send_email(smtp, recipients, f"Morning Deal Brief · {date_str}", brief_md, brief_html)
+                    states.update({p: "rejected" if p in refused else "accepted" for p in recipients})
+                    if refused:
+                        issues.append(f"SMTP rejected {len(refused)} recipient(s)")
+                except RetryableDeliveryError as exc:
+                    states.update(dict.fromkeys(recipients, "rejected"))
+                    issues.append(str(exc))
+                except Exception:
+                    issues.append("SMTP acknowledgement uncertain")
+                save()
+    if issues:
+        raise RuntimeError("Delivery incomplete. " + ". ".join(issues))
+    logger.info("Delivery confirmed for %s", date_str)

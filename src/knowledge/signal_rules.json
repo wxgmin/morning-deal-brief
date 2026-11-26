@@ -1,0 +1,1509 @@
+{
+ "about": "Historical-tendency rules researched 2026-11-24. Threshold provenance: SOURCE = stated by the cited source; CONVENTION = market practice; APP_HEURISTIC = app default, never presented as sourced. Citations marked verified=known were not re-checked in research and are not displayed.",
+ "rules": {
+  "R01": {
+   "id": "R01",
+   "indicator": "2s10s Treasury spread (10Y minus 2Y)",
+   "measures": "Slope of the Treasury curve. Reflects expected policy path (2Y) vs long-run growth/inflation + term premium (10Y).",
+   "series": "T10Y2Y",
+   "normal_range": "Positive most of the time. Inverted (<0) in the late cycle before most post-1970 US recessions.",
+   "inputs": [
+    "spread_2s10s_bp"
+   ],
+   "condition": "spread_2s10s_bp < 0 (sustained, e.g. monthly average < 0)",
+   "threshold_provenance": "CONVENTION (zero line); the Fed literature prefers 3m10y",
+   "tag": "CURVE_INVERTED_2S10S",
+   "implies": "Historically associated with markets pricing future policy easing and a higher probability of recession over the following 6-24 months. Pressure on bank NIM expectations.",
+   "assets": [
+    "UST",
+    "banks (XLF/KRE)",
+    "cyclicals vs defensives"
+   ],
+   "sentence": "The 2s10s curve is inverted at {level}bp. Historically, inversions have preceded most US recessions, but with long and variable lags (often 6-24 months), and the 2022-24 inversion was not followed by a recession within that window.",
+   "caveats": [
+    "Lead time is long and variable",
+    "2s10s inverts more often and less decisively than 3m10y (FRBSF 2022)",
+    "QE-compressed term premium can flatten the curve without signalling recession (Engstrom & Sharpe 2018)"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.frbsf.org/research-and-insights/publications/economic-letter/2022/05/current-recession-risk-according-to-yield-curve",
+     "verified": "search"
+    },
+    {
+     "url": "https://federalreserve.gov/econres/notes/feds-notes/dont-fear-the-yield-curve-20180628.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://fred.stlouisfed.org/series/T10Y2Y",
+     "verified": "known"
+    }
+   ]
+  },
+  "R02": {
+   "id": "R02",
+   "indicator": "10Y minus 3M Treasury spread",
+   "measures": "The NY Fed's preferred curve slope for its 12-month-ahead recession probability (probit, Estrella-Mishkin).",
+   "series": "T10Y3M",
+   "inputs": [
+    "spread_3m10y_bp",
+    "nyfed_recession_prob_pct"
+   ],
+   "condition": "monthly avg spread_3m10y_bp < 0 OR nyfed_recession_prob_pct >= 30",
+   "threshold_provenance": "SOURCE for the zero line and the NY Fed probit. 30% is a CONVENTION often cited as 'elevated'; treat it as APP_HEURISTIC",
+   "tag": "CURVE_INVERTED_3M10Y",
+   "implies": "Historically the most reliable single market-based recession predictor in Fed research.",
+   "assets": [
+    "UST",
+    "equities",
+    "credit"
+   ],
+   "sentence": "The 3m10y spread is {level}bp. In NY Fed and FRBSF research, a negative 3m10y slope has historically preceded US recessions with a lag of roughly 6-24 months. The model output is a probability, not a forecast.",
+   "caveats": [
+    "The 2022-24 inversion was the longest on record without a recession inside the typical window",
+    "Term premium distortion: a 'real' spread version gave lower probabilities in 2023 (St. Louis Fed)"
+   ],
+   "confidence": "M-H",
+   "citations": [
+    {
+     "url": "https://www.newyorkfed.org/medialibrary/media/research/capital_markets/Prob_Rec.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.newyorkfed.org/research/capital_markets/ycfaq",
+     "verified": "known"
+    },
+    {
+     "url": "https://www.federalreserve.gov/econres/notes/feds-notes/predicting-recession-probabilities-using-the-slope-of-the-yield-curve-20180301.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.stlouisfed.org/on-the-economy/2023/sep/what-probability-recession-message-yield-spreads",
+     "verified": "search"
+    }
+   ]
+  },
+  "R03": {
+   "id": "R03",
+   "indicator": "2s10s or 3m10y crossing back above zero after an inversion",
+   "inputs": [
+    "spread_bp",
+    "min_spread_prior_24m_bp",
+    "chg_2y_bp_20d",
+    "chg_10y_bp_20d"
+   ],
+   "condition": "min_spread_prior_24m_bp < 0 AND spread_bp crosses > 0 AND driven by 2Y falling (bull steepening)",
+   "threshold_provenance": "CONVENTION",
+   "tag": "CURVE_DISINVERSION_BULL",
+   "implies": "Historically the curve has often re-steepened, mostly via falling front-end yields as the Fed cuts, around or shortly before recession onsets. The 'all clear' reading is therefore historically unreliable.",
+   "assets": [
+    "UST front end",
+    "equities",
+    "credit"
+   ],
+   "sentence": "The curve has dis-inverted to {level}bp, led by a {chg_2y}bp fall in 2Y yields. Historically, bull re-steepening after an inversion has often coincided with Fed easing near the start of downturns rather than signalling the all-clear.",
+   "caveats": [
+    "Small sample (about 8 US cycles)",
+    "Re-steepening driven by term premium (bear steepening) has a different meaning; see R04"
+   ],
+   "confidence": "L-M",
+   "citations": [
+    {
+     "url": "https://www.frbsf.org/research-and-insights/publications/economic-letter/2022/05/current-recession-risk-according-to-yield-curve",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cmegroup.com/articles/2024/staying-ahead-of-the-yield-curve.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R04": {
+   "id": "R04",
+   "indicator": "Curve move decomposition",
+   "inputs": [
+    "chg_2y_bp",
+    "chg_10y_bp",
+    "window (1d or 5d)"
+   ],
+   "condition": {
+    "BULL_STEEPENER": "chg_2y < 0 AND chg_10y - chg_2y > 0",
+    "BEAR_STEEPENER": "chg_10y > 0 AND chg_10y - chg_2y > 0",
+    "BULL_FLATTENER": "chg_10y < 0 AND chg_10y - chg_2y < 0",
+    "BEAR_FLATTENER": "chg_2y > 0 AND chg_10y - chg_2y < 0"
+   },
+   "min_size": "APP_HEURISTIC: |chg_10y - chg_2y| >= 5bp/day or z >= 1.5",
+   "threshold_provenance": "CONVENTION (definitions per CME)",
+   "tag": "CURVE_{TYPE}",
+   "implies": {
+    "BULL_STEEPENER": "Markets pricing nearer/faster Fed cuts. Often growth-scare or easing.",
+    "BEAR_STEEPENER": "Long-end selloff from term premium, supply or inflation worries. Can tighten financial conditions (2023 'Treasury tantrum').",
+    "BULL_FLATTENER": "Long-end rally on growth/inflation worries or flight to quality.",
+    "BEAR_FLATTENER": "Front end repricing for a more hawkish Fed. Typical of hiking cycles."
+   },
+   "sentence": "The curve moved in a {type} pattern: 2Y {chg_2y}bp and 10Y {chg_10y}bp. Historically, {type_meaning}.",
+   "caveats": [
+    "Single-day classification is noisy; prefer 5-day",
+    "Supply/auction days can produce mechanical bear steepening"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.cmegroup.com/newsletters/excell-with-options-report-from-rich-excell/excell-with-options-report-from-rich-excell-2025-07-08.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://cmegroup.com/education/whitepapers/trading-the-treasury-yield-curve.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.federalreserve.gov/econres/notes/feds-notes/the-treasury-tantrum-of-2023-20240903.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R05": {
+   "id": "R05",
+   "indicator": "10Y Treasury yield daily change",
+   "series": "DGS10",
+   "inputs": [
+    "chg_10y_bp",
+    "z_10y"
+   ],
+   "condition": "|chg_10y_bp| >= 10 OR |z_10y| >= 2",
+   "threshold_provenance": "APP_HEURISTIC (10bp is a desk convention; use z-score as primary)",
+   "tag": "RATES_SHOCK_UP / RATES_SHOCK_DOWN",
+   "implies": "Large up-moves tighten financial conditions: pressure on long-duration equities (growth/tech), small caps, REITs, mortgage rates. Large down-moves on weak data are a growth scare. Bond markets react most strongly to macro news among asset classes.",
+   "sentence": "The 10Y yield moved {chg}bp ({z} standard deviations). Historically, moves of this size tied to macro news have shown up first and most strongly in bonds, with the equity reaction depending on whether the driver is growth news or inflation/policy news.",
+   "caveats": [
+    "Sign of equity reaction depends on the driver (growth vs discount-rate shock) and the business-cycle state (Andersen et al.)"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://nber.org/papers/w11312",
+     "verified": "search"
+    },
+    {
+     "url": "https://federalreserve.gov/econres/ifdp/real-time-price-discovery-in-global-stock-bond-and-foreign-exchange-markets.htm",
+     "verified": "search"
+    }
+   ]
+  },
+  "R06": {
+   "id": "R06",
+   "indicator": "10Y TIPS real yield",
+   "series": "DFII10",
+   "measures": "Inflation-adjusted return on 10Y Treasuries; the opportunity cost of holding non-yielding assets (gold) and a key discount-rate input for equities.",
+   "normal_range": "Roughly -1% to +2.5% since 2003 (check the live series)",
+   "inputs": [
+    "chg_real10y_bp_20d",
+    "gold_ret_20d"
+   ],
+   "condition": "chg_real10y_bp_20d >= +25 (APP_HEURISTIC) or z >= 2",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "REAL_YIELDS_UP",
+   "implies": "Historically gold has been negatively correlated with real yields (Erb & Harvey report a strong negative correlation between 10Y TIPS yields and the real gold price). Higher real yields also weigh on long-duration equities.",
+   "sentence": "10Y real yields rose {chg}bp over {window}. Historically, rising real yields have been associated with weaker gold and long-duration equities, but since 2022 heavy central-bank gold buying has weakened the gold link.",
+   "caveats": [
+    "Correlation is not causation (Erb & Harvey)",
+    "2022-2026: gold rallied despite high real yields, linked to EM central-bank purchases and sanctions risk (IMF)"
+   ],
+   "confidence": "M (weaker post-2022)",
+   "citations": [
+    {
+     "url": "https://www.nber.org/papers/w18706",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.imf.org/-/media/files/publications/wp/2023/english/wpiea2023014-print-pdf.pdf.md",
+     "verified": "search"
+    },
+    {
+     "url": "https://fred.stlouisfed.org/series/DFII10",
+     "verified": "known"
+    }
+   ]
+  },
+  "R07": {
+   "id": "R07",
+   "indicator": "10Y breakeven inflation (nominal minus TIPS)",
+   "series": "T10YIE; 5y5y forward T5YIFR",
+   "measures": "Market-implied inflation compensation = expected inflation + inflation risk premium - TIPS liquidity premium.",
+   "normal_range": "Roughly 2.0-2.5% in 'anchored' periods; well below 2% in deflation scares (2008, 2020)",
+   "inputs": [
+    "be10y_pct",
+    "chg_be10y_bp_20d",
+    "be5y5y_pct"
+   ],
+   "condition": "chg_be10y_bp_20d >= +20 OR be5y5y moves outside its 2y range (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "INFLATION_COMP_UP / DOWN",
+   "implies": "Rising breakevens: reflation (commodities, cyclicals, TIPS outperform nominals) or a de-anchoring worry (hawkish Fed risk). Falling breakevens with falling oil: disinflation or growth scare.",
+   "sentence": "10Y breakevens moved {chg}bp to {level}%. Historically, breakevens track oil and growth expectations closely. Because they also embed liquidity and risk premia, the Fed pays most attention to longer-horizon measures such as 5y5y.",
+   "caveats": [
+    "TIPS liquidity distortions, especially in crises (Cleveland Fed)",
+    "Highly correlated with oil at short horizons"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.clevelandfed.org/indicators-and-data/inflation-expectations",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.clevelandfed.org/publications/economic-commentary/2010/ec-201005-inflation-noise-risk-and-expectations",
+     "verified": "search"
+    },
+    {
+     "url": "https://fred.stlouisfed.org/series/T10YIE",
+     "verified": "known"
+    }
+   ]
+  },
+  "R08": {
+   "id": "R08",
+   "indicator": "10Y term premium (ACM / Kim-Wright)",
+   "series": "NY Fed ACM; FRED THREEFYTP10 (Kim-Wright)",
+   "measures": "Extra compensation for holding long bonds vs rolling short bills. Model-dependent.",
+   "inputs": [
+    "tp10_acm_bp",
+    "chg_tp_bp_20d",
+    "chg_10y_bp_20d"
+   ],
+   "condition": "chg_10y_bp_20d >= 25 AND share of move from TP >= 50%",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "TERM_PREMIUM_DRIVEN_SELLOFF",
+   "implies": "A term-premium-driven rise in yields (supply, fiscal, uncertainty) tightens financial conditions without implying a more hawkish Fed path. In 2023 it followed Treasury's issuance surprise.",
+   "sentence": "Most of the {chg}bp rise in 10Y yields is attributed to term premium in the {model} model. Historically, term-premium-driven selloffs (e.g. Aug-Oct 2023) have reflected supply and uncertainty rather than Fed expectations. Model estimates differ widely.",
+   "caveats": [
+    "Models can disagree on sign and size: at the Oct 2023 peak ACM about 0.46, KW about 0.39, CR about 1.37 (Fed note)",
+    "Revised and estimated, not observed"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.newyorkfed.org/research/data_indicators/term-premia-tabs",
+     "verified": "search (via link)"
+    },
+    {
+     "url": "https://www.federalreserve.gov/econres/notes/feds-notes/the-treasury-tantrum-of-2023-20240903.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.bis.org/publ/qtrpdf/r_qt2312a.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://fred.stlouisfed.org/blog/2025/05/the-term-premium/",
+     "verified": "search"
+    }
+   ]
+  },
+  "R09": {
+   "id": "R09",
+   "indicator": "Implied policy path (FedWatch, SOFR futures)",
+   "measures": "Market-implied probabilities of FOMC outcomes (fed funds futures price = 100 - expected avg EFFR).",
+   "inputs": [
+    "implied_cuts_bp_12m",
+    "chg_implied_cuts_bp_1d",
+    "prob_next_meeting_move"
+   ],
+   "condition": "|chg_implied_cuts_bp_1d| >= 15 (APP_HEURISTIC, i.e. more than half a cut repriced) OR prob_next_meeting crosses 50%",
+   "threshold_provenance": "APP_HEURISTIC; methodology is SOURCE (CME)",
+   "tag": "POLICY_REPRICE_DOVISH / HAWKISH",
+   "implies": "Dovish repricing: front-end rally, bull steepening, weaker USD, small caps and gold supported. Hawkish: the reverse.",
+   "sentence": "Futures now price {cuts}bp of cuts over 12 months, a {chg}bp change on the day. These are market-implied probabilities under CME's method, not forecasts, and they have historically swung sharply on payrolls and CPI surprises.",
+   "caveats": [
+    "Embeds risk premia, so not a pure expectation",
+    "FedWatch's conditional vs aggregated views differ (CME 2024)"
+   ],
+   "confidence": "H (as a description)",
+   "citations": [
+    {
+     "url": "https://www.cmegroup.com/articles/2023/understanding-the-cme-group-fedwatch-tool-methodology.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://cmegroup.com/articles/2024/the-cme-fedwatch-tool-aggregated-enhancement-explained.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R10": {
+   "id": "R10",
+   "indicator": "ICE BofA MOVE index",
+   "measures": "Implied normal yield volatility from 1-month options on 2/5/10/30Y Treasuries. Direction-neutral.",
+   "normal_range": "Ranged from about 55 (late 2025) to about 115 (early 2026) per Schwab. 2008 peak about 265.",
+   "inputs": [
+    "move_level",
+    "move_pctile_5y"
+   ],
+   "condition": "move_pctile_5y >= 80 (APP_HEURISTIC). Some desks use 120+ as 'stressed' (CONVENTION)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "RATES_VOL_ELEVATED",
+   "implies": "High rates vol tends to coincide with wider credit/MBS spreads, worse Treasury liquidity, and reduced risk-taking (dealer balance-sheet VaR).",
+   "sentence": "The MOVE index is {level} ({pctile} percentile). Elevated Treasury volatility has historically coincided with tighter financial conditions and wider mortgage and credit spreads. It measures expected swing size, not direction.",
+   "caveats": [
+    "Methodology proprietary (ICE)",
+    "Can stay elevated for long periods in hiking cycles"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.schwab.com/learn/story/whats-move-index-and-why-it-might-matter",
+     "verified": "search"
+    }
+   ]
+  },
+  "R11": {
+   "id": "R11",
+   "indicator": "Auction stop vs when-issued (tail), bid-to-cover, indirect share",
+   "inputs": [
+    "tail_bp (high yield - WI yield at 1pm)",
+    "btc",
+    "btc_avg_6",
+    "indirect_pct",
+    "indirect_avg_6"
+   ],
+   "condition": "tail_bp >= 1.0 AND btc < btc_avg_6 (APP_HEURISTIC). Stop-through: tail_bp <= -1.0",
+   "threshold_provenance": "APP_HEURISTIC (desk convention compares against the 6-auction average)",
+   "tag": "AUCTION_WEAK / AUCTION_STRONG",
+   "implies": "Weak long-end auctions have been associated with intraday long-end selloffs and bear steepening, especially in heavy-supply / term-premium regimes. Older evidence: yields tend to rise into auctions and fall after (supply concession).",
+   "sentence": "The {tenor} auction tailed {tail}bp with bid-to-cover of {btc}x vs a {btc_avg}x average. Historically, weak auctions have produced short-lived long-end selloffs, and the market impact usually fades within days unless it confirms a broader supply-driven trend.",
+   "caveats": [
+    "Effects are mostly transitory",
+    "Indirect bidder category is a noisy proxy for foreign demand"
+   ],
+   "confidence": "L-M",
+   "citations": [
+    {
+     "url": "https://finance.darden.virginia.edu/wp-content/uploads/2025/12/Somogyi_Wallen_Xu_2025_What_Treasury_Auctions_Reveal_About_Investor_Demand.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.bis.org/publ/qtrpdf/r_qt2312a.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.treasurydirect.gov/auctions/auction-query/",
+     "verified": "known"
+    }
+   ]
+  },
+  "R12": {
+   "id": "R12",
+   "indicator": "Reserve balances (WRESBAL), ON RRP usage (RRPONTSYD), Fed balance sheet (WALCL), TGA",
+   "measures": "System liquidity. Falling reserves/RRP buffers during QT can create money-market strain.",
+   "inputs": [
+    "reserves_usd_bn",
+    "rrp_usd_bn",
+    "sofr_minus_iorb_bp"
+   ],
+   "condition": "sofr_minus_iorb_bp > 0 for several days OR reserves fall sharply around tax dates/quarter-end with rrp near zero",
+   "threshold_provenance": "APP_HEURISTIC. The NY Fed says there is no fixed number for 'ample' reserves",
+   "tag": "LIQUIDITY_TIGHTENING",
+   "implies": "In Sept 2019 reserves fell to about $1.34tn around the corporate tax date + heavy Treasury settlement, and repo rates spiked, prompting Fed repo operations and bill purchases.",
+   "sentence": "Reserves are {level}bn and ON RRP is {rrp}bn. Historically, when RRP buffers are depleted and repo rates trade above the IORB rate, money-market strain has followed (Sept 2019), often prompting Fed action.",
+   "caveats": [
+    "No fixed 'ample' threshold (NY Fed)",
+    "Standing Repo Facility (2021) changes the dynamics"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.federalreserve.gov/econres/notes/feds-notes/what-happened-in-money-markets-in-september-2019-20200227.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.newyorkfed.org/newsevents/speeches/2019/wil191017",
+     "verified": "search"
+    },
+    {
+     "url": "https://fred.stlouisfed.org/series/RRPONTSYD",
+     "verified": "known"
+    }
+   ]
+  },
+  "R13": {
+   "id": "R13",
+   "indicator": "DXY / Fed broad dollar index (DTWEXBGS)",
+   "inputs": [
+    "dxy_ret_20d_pct",
+    "z"
+   ],
+   "condition": "dxy_ret_20d_pct >= +3 OR z >= 2 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "USD_STRENGTH",
+   "implies": "BIS: the broad dollar acts as a barometer of global risk-taking capacity. A stronger dollar has been associated with tighter global financial conditions, less cross-border USD lending, weaker EM growth outlooks (1pp dollar appreciation -> EM growth outlook down >0.3pp), and historically lower commodity prices.",
+   "assets": [
+    "EM FX/equities/debt",
+    "commodities",
+    "US multinationals' earnings"
+   ],
+   "sentence": "The dollar is up {chg}% over {window}. In BIS research, broad dollar strength has historically coincided with tighter global financial conditions and weaker emerging-market assets.",
+   "caveats": [
+    "The oil-dollar correlation turned positive after 2020 as the US became a net energy exporter (IMF 2024)",
+    "The dollar can rise on US growth outperformance (benign) or on a flight to safety (risk-off)"
+   ],
+   "confidence": "M-H",
+   "citations": [
+    {
+     "url": "https://www.bis.org/publ/work592.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.bis.org/publ/qtrpdf/r_qt2012b.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://bis.org/press/p161115.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.imf.org/-/media/files/publications/esr/2024/english/ch2.pdf.md",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.imf.org/en/publications/wp/issues/2025/04/04/demand-for-safe-assets-and-spillovers-from-the-global-dollar-cycle-565749",
+     "verified": "search"
+    }
+   ]
+  },
+  "R14": {
+   "id": "R14",
+   "indicator": "USD/JPY",
+   "inputs": [
+    "usdjpy_ret_5d_pct",
+    "vix_chg",
+    "nikkei_ret_1d"
+   ],
+   "condition": "usdjpy_ret_5d_pct <= -3 (yen strengthening) AND vix rising (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "CARRY_UNWIND",
+   "implies": "Funding-currency spikes (yen) with high-yielders falling (MXN, EM FX) have marked carry-trade unwinds. Volatility amplified by procyclical deleveraging and margin calls (Aug 2024: TOPIX -12% on 5 Aug; BIS estimated about ¥40tn / $250bn of FX carry positions).",
+   "sentence": "The yen has strengthened {chg}% in {window} while volatility is rising. Historically, abrupt yen rallies have coincided with carry-trade unwinds that hit high-yielding EM currencies and crowded equity trades. The August 2024 episode was sharp but short-lived.",
+   "caveats": [
+    "Carry positioning is hard to measure (BIS)",
+    "BoJ communication can quickly stabilise markets"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.bis.org/publ/bisbull90.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://bis.org/publ/qtrpdf/r_qt2409a.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.nber.org/papers/w14473",
+     "verified": "known (Brunnermeier, Nagel, Pedersen: Carry Trades and Currency Crashes)"
+    }
+   ]
+  },
+  "R15": {
+   "id": "R15",
+   "indicator": "WTI / Brent",
+   "inputs": [
+    "oil_ret_1d_pct",
+    "oil_ret_20d_pct",
+    "oil_vs_3y_high"
+   ],
+   "condition": "oil_ret_20d_pct >= +20 OR oil makes a new 3-year high (Hamilton's 'net oil price increase' concept)",
+   "threshold_provenance": "SOURCE for the concept (Hamilton's net oil price increase over the prior 3-year max). The 20% figure is APP_HEURISTIC",
+   "tag": "OIL_SHOCK_UP",
+   "implies": "Hamilton: oil price increases matter much more than decreases (nonlinear). Large increases above recent highs have preceded most postwar US recessions, by disrupting consumer and firm spending. Short-run: higher breakevens, energy outperforms, airlines/consumer discretionary underperform, bear-flattening risk if the Fed is hawkish.",
+   "sentence": "Oil is up {chg}% over {window} to {level}. Historically, large oil price increases, especially to new multi-year highs, have weighed on consumer spending and preceded several US recessions. Declines have had a smaller, less reliable effect.",
+   "caveats": [
+    "The US is now a net petroleum exporter, so the domestic impact is more mixed",
+    "Demand-driven oil rallies (strong growth) differ from supply shocks"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.nber.org/papers/w7755",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.brookings.edu/wp-content/uploads/2009/03/2009a_bpea_hamilton.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.nber.org/papers/w16790",
+     "verified": "search"
+    }
+   ]
+  },
+  "R16": {
+   "id": "R16",
+   "indicator": "WTI/Brent M1-M12 spread",
+   "inputs": [
+    "m1_minus_m12_usd"
+   ],
+   "condition": {
+    "BACKWARDATION": "m1 > m12",
+    "CONTANGO": "m1 < m12",
+    "STEEP": "|spread| in top decile 5y (APP_HEURISTIC)"
+   },
+   "threshold_provenance": "SOURCE (definitions, EIA)",
+   "tag": "OIL_BACKWARDATION / OIL_CONTANGO",
+   "implies": "Backwardation is associated with tight physical markets and low inventories (supports prompt prices, inflation pressure). Contango with oversupply and high inventories (storage pays). Super-contango (Apr 2020) signals storage stress.",
+   "sentence": "The oil curve is in {state} ({spread} USD M1-M12). Historically, backwardation has reflected tight supply and low inventories, while contango has reflected oversupply. Curve shape describes current balances, not future prices.",
+   "caveats": [
+    "Geopolitical risk can steepen backwardation without a lasting inventory change"
+   ],
+   "confidence": "H (definitional)",
+   "citations": [
+    {
+     "url": "https://www.eia.gov/todayinenergy/detail.php?id=13051",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cmegroup.com/newsletters/wti-insights-by-pvm/wti-insights-by-pvm-2026-09-21.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R17": {
+   "id": "R17",
+   "indicator": "Copper price / gold price",
+   "inputs": [
+    "cu_au_ratio_ret_20d",
+    "chg_10y_bp_20d"
+   ],
+   "condition": "sign(cu_au_ret_20d) != sign(chg_10y_20d) AND both |z| >= 1.5 (divergence)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "CU_AU_DIVERGENCE",
+   "implies": "Historically co-moved with the 10Y yield (cyclical growth vs safety). Popularised as a short-term yield indicator. A falling ratio has been read as a growth-scare signal.",
+   "sentence": "The copper/gold ratio moved {chg}% while 10Y yields moved {chg10}bp. The ratio historically tracked Treasury yields, but the relationship has largely broken down since 2021 as central-bank gold buying lifted gold, so treat divergences cautiously.",
+   "caveats": [
+    "Correlation broke down after 2021 (CFA Institute, MNI)",
+    "Academic support limited to very short horizons"
+   ],
+   "confidence": "L",
+   "citations": [
+    {
+     "url": "https://blogs.cfainstitute.org/blog/2023/03/16/is-the-copper-gold-ratio-a-leading-indicator-on-rates",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.mnimarkets.com/articles/-2657526430",
+     "verified": "search"
+    }
+   ]
+  },
+  "R18": {
+   "id": "R18",
+   "indicator": "Gold spot",
+   "inputs": [
+    "gold_ret_20d",
+    "gold_ath_flag",
+    "real10y_chg",
+    "dxy_chg"
+   ],
+   "condition": "gold_ath_flag OR gold z >= 2",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "GOLD_BID",
+   "implies": "Drivers per IMF/ECB: safe-haven demand in uncertainty, opportunity cost (real rates, Fed funds), sanctions-related central-bank reserve diversification. ECB finds safe-haven behaviour in stress. IMF notes this is unreliable in tail events.",
+   "sentence": "Gold is up {chg}% ({context}). Historically, gold strength has reflected falling real rates, a weaker dollar, geopolitical or policy uncertainty, and, since 2022, heavy central-bank buying. Its safe-haven behaviour in sharp selloffs has been inconsistent.",
+   "caveats": [
+    "Erb & Harvey (2025): returns after all-time highs have often been low over multi-year horizons",
+    "Gold can fall in liquidity scrambles (March 2020)"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.imf.org/-/media/files/publications/imf-notes/2026/english/insea2026007.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.ecb.europa.eu/press/financial-stability-publications/fsr/focus/2025/html/ecb.fsrbox202505_02~7f616fcd3f.da.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.brookings.edu/articles/how-important-are-central-bank-holdings-of-gold/",
+     "verified": "search"
+    },
+    {
+     "url": "https://papers.ssrn.com/abstract=5525138",
+     "verified": "search"
+    }
+   ]
+  },
+  "R19": {
+   "id": "R19",
+   "indicator": "BTC/USD",
+   "inputs": [
+    "btc_ret_1d",
+    "spx_ret_1d",
+    "corr_btc_spx_60d"
+   ],
+   "condition": "|btc_ret_1d| z >= 2 AND corr_btc_spx_60d >= 0.3 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC; correlation figures are SOURCE (IMF)",
+   "tag": "CRYPTO_RISK_MOVE",
+   "implies": "IMF: BTC-S&P 500 daily correlation rose from 0.01 (2017-19) to 0.36 (2020-21). BTC volatility explained about 1/6 of S&P volatility during the pandemic. BTC has behaved as a high-beta risk asset rather than a hedge.",
+   "sentence": "Bitcoin moved {chg}% with a 60-day S&P correlation of {corr}. Since 2020, IMF research finds crypto has traded more like a high-beta risk asset than a hedge, so large crypto moves have often accompanied broader risk appetite shifts.",
+   "caveats": [
+    "Correlation is window-dependent and unstable",
+    "Crypto-specific events (ETF flows, hacks, regulation) dominate at times",
+    "Trades 24/7, so weekend moves can lead Monday's equity open"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.imf.org/en/Blogs/Articles/2022/01/11/crypto-prices-move-more-in-sync-with-stocks-posing-new-risks",
+     "verified": "search"
+    }
+   ]
+  },
+  "R20": {
+   "id": "R20",
+   "indicator": "Cboe VIX",
+   "measures": "30-day implied volatility of S&P 500 options.",
+   "normal_range": "Long-term median about 17.6 (Cboe). Since 1990 mostly 13-25 (20th-80th pct), mean about 19.5. Post-major-decline average about 37 (Cboe).",
+   "inputs": [
+    "vix"
+   ],
+   "condition": {
+    "VIX_COMPLACENT": "vix < 15",
+    "VIX_NORMAL": "15 <= vix < 20",
+    "VIX_ELEVATED": "20 <= vix < 30",
+    "VIX_STRESS": "vix >= 30"
+   },
+   "threshold_provenance": "CONVENTION. Bands bracket Cboe's 17.6 median and the 13/25 percentiles. 30+ approximates stress regimes (Cboe post-decline avg 37)",
+   "tag": "{band}",
+   "implies": "VIX is mean-reverting (Cboe). Low VIX is calm but can coincide with leverage build-up (BIS: positions built in calm periods unwind fast). VIX >= 30 historically clusters with drawdowns and wider credit spreads, and also with elevated subsequent returns on average.",
+   "sentence": "VIX is {level}, versus a long-run median near 17.6 (Cboe). Historically, readings {band_text} have been associated with {band_meaning}. VIX tends to mean-revert, but timing is unreliable.",
+   "caveats": [
+    "Implied vol embeds a risk premium (usually above realized)",
+    "Spikes can be brief (Aug 2024) or persistent (2008)"
+   ],
+   "confidence": "H (descriptive)",
+   "citations": [
+    {
+     "url": "https://www.cboe.com/insights/posts/inside-volatility-trading-more-chaos-ahead-or-a-bottom-what-does-the-vix-index-say",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.indexologyblog.com/2022/05/31/29-years-of-vix/",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cboe.com/tradable-products/vix/vix-historical-data/",
+     "verified": "search"
+    }
+   ]
+  },
+  "R21": {
+   "id": "R21",
+   "inputs": [
+    "vix_chg_pct_1d",
+    "vix_chg_pts_1d"
+   ],
+   "condition": "vix_chg_pct_1d >= +20 OR vix_chg_pts >= +4 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "VOL_SPIKE",
+   "sentence": "VIX jumped {chg} points ({chg_pct}%). Historically, sharp one-day volatility spikes reflect a rush for downside protection. Many fade within days, while those accompanied by credit widening have tended to last longer.",
+   "caveats": [
+    "Percentage change exaggerates moves from low bases"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.bis.org/publ/bisbull90.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cboe.com/insights/posts/inside-volatility-trading-more-chaos-ahead-or-a-bottom-what-does-the-vix-index-say",
+     "verified": "search"
+    }
+   ]
+  },
+  "R22": {
+   "id": "R22",
+   "indicator": "VIX / VIX3M ratio (or VIX futures M1 vs M2)",
+   "inputs": [
+    "vix",
+    "vix3m"
+   ],
+   "condition": "vix / vix3m > 1.0 (backwardation). Watch zone 0.9-1.0 (community convention)",
+   "threshold_provenance": "SOURCE for the concept (Cboe: contango is normal; backwardation occurred <20% of the time since 2010). 1.0 is definitional. 0.9 is a community convention (APP_HEURISTIC)",
+   "tag": "VIX_TERM_INVERTED",
+   "implies": "Near-term fear exceeds medium-term. Historically coincides with acute selloffs.",
+   "sentence": "Front-month implied volatility ({vix}) exceeds 3-month ({vix3m}), an inverted term structure. Cboe data show this has happened less than 20% of the time since 2010 and marks acute stress, but Cboe notes it has not reliably predicted further declines outside the largest selloffs.",
+   "caveats": [
+    "Often coincident with, or late to, the selloff; sometimes near capitulation lows",
+    "Cboe explicitly warns backwardation is not necessarily a sign of a future down market"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.cboe.com/insights/posts/inside-volatility-trading-is-vix-backwardation-necessarily-a-sign-of-a-future-down-market",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cboe.com/tradable_products/vix/term_structure",
+     "verified": "search"
+    }
+   ]
+  },
+  "R23": {
+   "id": "R23",
+   "indicator": "ICE BofA US High Yield OAS",
+   "series": "BAMLH0A0HYM2",
+   "normal_range": "Recent: about 2.7% (Aug 2026) to 3.2% (12 Nov 2026) per FRED. The Fed FSR (Nov 2025) described spreads as well below historical medians.",
+   "inputs": [
+    "hy_oas_bp",
+    "hy_oas_pctile_hist"
+   ],
+   "condition": {
+    "HY_TIGHT": "hy_oas_pctile_hist <= 10",
+    "HY_STRESS": "hy_oas_bp >= 600 (APP_HEURISTIC)",
+    "HY_DISTRESS_SIGNAL": "S&P distress ratio (share of HY issues > 1,000bp OAS) rising"
+   },
+   "threshold_provenance": "1,000bp = SOURCE (Fridson/S&P distress definition). Percentile bands = APP_HEURISTIC computed from history. 600bp = APP_HEURISTIC",
+   "tag": "{band}",
+   "implies": "Tight spreads = strong risk appetite and open markets for issuers. Fed research (López-Salido, Stein, Zakrajšek): narrow spreads + high junk issuance share have historically preceded slower growth 2-3 years later. Wide spreads = tighter credit supply.",
+   "sentence": "HY spreads are {level}bp ({pctile} percentile of history). Historically, very tight spreads have reflected strong risk appetite. Fed research finds that unusually tight spreads with heavy junk issuance have preceded slower growth a few years later, while sharp widening has preceded weaker activity.",
+   "caveats": [
+    "Index composition has shifted to higher quality (more BB) over time, so raw levels are not fully comparable",
+    "FRED now shows only 3 years of history (from Apr 2026); source full history from ICE"
+   ],
+   "confidence": "M-H",
+   "citations": [
+    {
+     "url": "https://fred.stlouisfed.org/series/BAMLH0A0HYM2",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.federalreserve.gov/publications/november-2025-financial-stability-report-asset-valuations.htm",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.spglobal.com/market-intelligence/en/news-insights/articles/2021/11/fridson-monthly-definitizing-the-definition-of-distress-67760867",
+     "verified": "search"
+    },
+    {
+     "url": "https://federalreserve.gov/econresdata/feds/2015/files/2015028r1pap.pdf",
+     "verified": "search"
+    }
+   ]
+  },
+  "R24": {
+   "id": "R24",
+   "inputs": [
+    "hy_oas_chg_bp_1d",
+    "hy_oas_chg_bp_20d"
+   ],
+   "condition": "hy_oas_chg_bp_20d >= +100 OR hy_oas_chg_bp_1d >= +25 (APP_HEURISTIC; prefer z >= 2)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "CREDIT_WIDENING_FAST",
+   "implies": "Gilchrist-Zakrajšek: unexpected increases in bond spreads, especially the excess bond premium, have been followed by large and persistent contractions in activity, signalling reduced risk-bearing capacity and less credit supply.",
+   "sentence": "HY spreads widened {chg}bp over {window}. In Fed research, rapid spread widening beyond what default risk explains (the excess bond premium) has historically preceded tighter credit supply and weaker economic activity.",
+   "caveats": [
+    "Technical (fund-flow) widening can reverse quickly",
+    "EBP history revises monthly"
+   ],
+   "confidence": "M-H",
+   "citations": [
+    {
+     "url": "https://www.nber.org/papers/w14863",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.federalreserve.gov/econres/notes/feds-notes/updating-the-recession-risk-and-the-excess-bond-premium-20161006.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.federalreserve.gov/econresdata/notes/feds-notes/2016/recession-risk-and-the-excess-bond-premium-20160408.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R25": {
+   "id": "R25",
+   "indicator": "ICE BofA US Corporate (IG) OAS",
+   "series": "BAMLC0A0CM",
+   "inputs": [
+    "ig_oas_bp",
+    "ig_oas_chg_20d"
+   ],
+   "condition": "ig_oas_chg_20d >= +25 OR pctile >= 80 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "IG_WIDENING",
+   "implies": "IG widening raises funding costs for investment-grade issuers (M&A bridge takeouts, buybacks). It is less default-driven than HY and more sensitive to supply, rates vol and foreign demand.",
+   "sentence": "IG spreads moved {chg}bp to {level}bp. Historically, IG spreads widen with rate volatility and heavy supply as well as with growth fears. Sustained widening has raised borrowing costs for investment-grade acquirers.",
+   "caveats": [
+    "Supply-heavy weeks (e.g. jumbo M&A deals) widen spreads mechanically"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://fred.stlouisfed.org/series/BAMLC0A0CM",
+     "verified": "known"
+    },
+    {
+     "url": "https://www.federalreserve.gov/publications/november-2025-financial-stability-report-asset-valuations.htm",
+     "verified": "search"
+    }
+   ]
+  },
+  "R26": {
+   "id": "R26",
+   "indicator": "HYG and LQD ETF prices; HYG/IEF ratio",
+   "inputs": [
+    "hyg_ret_1d",
+    "ief_ret_1d",
+    "hyg_nav_discount_pct"
+   ],
+   "condition": "(hyg_ret - ief_ret) z <= -2 OR hyg_nav_discount_pct <= -1 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "CREDIT_ETF_STRESS",
+   "implies": "Intraday proxy for credit risk appetite when cash-bond OAS is stale. HYG excess return vs Treasuries isolates spread moves.",
+   "sentence": "HYG underperformed Treasuries by {spread_ret}% today. Credit ETFs give a real-time read on risk appetite. In stress (e.g. March 2020) they have traded at discounts to NAV, which can overstate cash-bond moves.",
+   "caveats": [
+    "ETF price includes rate duration, so hedge with IEF",
+    "NAV discounts are liquidity effects, not pure credit"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.bis.org/publications/bulletin-6-recent-distress-corporate-bond-markets-cues-etfs",
+     "title": "BIS Bulletin 6: Recent distress in corporate bond markets, cues from ETFs",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.nber.org/papers/w27168",
+     "title": "NBER w27168: corporate bond market stress in March 2020",
+     "verified": "search"
+    }
+   ]
+  },
+  "R27": {
+   "id": "R27",
+   "inputs": [
+    "spx_ret_20d",
+    "hy_oas_chg_20d"
+   ],
+   "condition": "spx near 52w high (within 3%) AND hy_oas_chg_20d >= +50 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "CREDIT_EQUITY_DIVERGENCE",
+   "implies": "Fed research: credit spreads contain information about future activity beyond what equity prices hold (Gilchrist-Yankov-Zakrajšek). Stock-market sentiment has little predictive power for real activity (López-Salido et al.).",
+   "sentence": "Equities are near highs while HY spreads have widened {chg}bp. Fed research finds credit spreads carry information about future activity that stock prices do not. Evidence that credit leads stock prices at short horizons, however, is mixed.",
+   "caveats": [
+    "Lead-lag between bond and stock returns is inconclusive in the academic literature (Tolikas 2018)"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.nber.org/papers/w14863",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.federalreserve.gov/newsevents/speech/files/credit-market-sentiment-and-the-business-cycle-20150223.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://bura.brunel.ac.uk/bitstream/2438/14729/3/FullText.pdf",
+     "verified": "search"
+    }
+   ]
+  },
+  "R28": {
+   "id": "R28",
+   "inputs": [
+    "pct_above_200dma",
+    "spx_ret_20d"
+   ],
+   "condition": {
+    "BREADTH_WASHOUT": "pct_above_200dma < 20",
+    "BREADTH_NARROW": "spx near high AND pct_above_200dma < 50",
+    "BREADTH_BROAD": "pct_above_200dma > 70"
+   },
+   "threshold_provenance": "CONVENTION (StockCharts/technical practice); no academic threshold",
+   "tag": "{band}",
+   "implies": "Narrow rallies (index up, few participants) are often read as fragile. Washouts often occur near selloff lows.",
+   "sentence": "Only {level}% of S&P 500 stocks are above their 200-day average, with the index {index_context}. Practitioners read narrow participation as a sign of fragility, though narrow, mega-cap-led markets have persisted for long stretches.",
+   "caveats": [
+    "Practitioner indicator; weak academic evidence",
+    "Cap-weighted index concentration can keep breadth narrow for years"
+   ],
+   "confidence": "L",
+   "citations": [
+    {
+     "url": "https://www.luxalgo.com/library/concept/breadth-thrusts.md",
+     "verified": "search"
+    },
+    {
+     "url": "https://chartschool.stockcharts.com/table-of-contents/market-indicators/percent-above-moving-average",
+     "verified": "known"
+    }
+   ]
+  },
+  "R29": {
+   "id": "R29",
+   "inputs": [
+    "ema10(adv/(adv+dec))"
+   ],
+   "condition": "ema10 rises from < 0.40 to > 0.615 within 10 sessions",
+   "threshold_provenance": "SOURCE (Zweig definition, per StockCharts)",
+   "tag": "BREADTH_THRUST",
+   "sentence": "A breadth thrust occurred: advancing issues surged from washed-out to strong participation within 10 days. StockCharts' review of 87 years of history shows mixed outcomes (10 'great', 3 'meh', 12 'horrible' signals), so it is a description, not a reliable buy signal.",
+   "caveats": [
+    "Rare; mixed record; built on NYSE data only"
+   ],
+   "confidence": "L",
+   "citations": [
+    {
+     "url": "https://articles.stockcharts.com/article/articles-arthurhill-2019-01-perspective---40-years-of-the-zweig-breadth-thrust---weight-of-the-evidence/",
+     "verified": "search"
+    },
+    {
+     "url": "https://stockcharts.com/articles/arthurhill/2023/11/the-zweig-breadth-thrust-trigg-609.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R30": {
+   "id": "R30",
+   "indicator": "Cboe equity / total put-call ratio",
+   "inputs": [
+    "pc_equity_10dma",
+    "pctile_2y"
+   ],
+   "condition": "pctile_2y >= 95 (fear extreme) OR <= 5 (complacency) (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC (use percentiles; levels drift with structural option growth)",
+   "tag": "PUTCALL_EXTREME_HIGH / LOW",
+   "implies": "Used as a contrarian gauge by practitioners. Academic evidence (Pan & Poteshman) is strong for stock-level, buyer-initiated opening volume, and weak or absent for aggregate index ratios.",
+   "sentence": "The equity put/call ratio's 10-day average is at an extreme ({pctile} percentile). Practitioners treat extremes as contrarian signals, but academic evidence for aggregate ratios is weak, so treat this as context rather than a signal.",
+   "caveats": [
+    "0DTE and ETF hedging have changed the ratio's composition",
+    "Index puts are often hedges, not directional bets"
+   ],
+   "confidence": "L",
+   "citations": [
+    {
+     "url": "https://www.nber.org/papers/w10925",
+     "verified": "search"
+    },
+    {
+     "url": "https://chartschool.stockcharts.com/table-of-contents/market-indicators/put-call-ratio",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.aaii.com/journal/article/295384-the-put-call-ratio-viewing-market-sentiment-through-options-activity",
+     "verified": "search"
+    }
+   ]
+  },
+  "R31": {
+   "id": "R31",
+   "inputs": [
+    "aaii_bull_minus_bear"
+   ],
+   "condition": "bull_minus_bear z <= -2 (extreme pessimism) or >= +2 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "AAII_EXTREME_BEARISH / BULLISH",
+   "implies": "Baker-Wurgler-Yuan: sentiment is a contrarian predictor of market returns in aggregate. For the AAII survey specifically, US predictability largely disappeared after 1994 (Hengelbrock, Theissen, Westheide).",
+   "sentence": "The AAII bull-bear spread is {level}, an extreme reading. Sentiment research finds extremes have historically been weakly contrarian, but the AAII survey's predictive power has been inconsistent since the mid-1990s.",
+   "caveats": [
+    "Small, self-selected weekly survey sample"
+   ],
+   "confidence": "L",
+   "citations": [
+    {
+     "url": "https://www.aaii.com/sentimentsurvey",
+     "verified": "known"
+    },
+    {
+     "url": "https://nber.org/papers/w10449",
+     "verified": "search"
+    },
+    {
+     "url": "https://publikationen.ub.uni-frankfurt.de/files/35663/263.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://dash.harvard.edu/bitstream/handle/1/16388335/baker-m%2cwurgler%2cyuan_global%2clocal%2cand-contagious_draft_v13.pdf?sequence=1",
+     "verified": "search"
+    }
+   ]
+  },
+  "R32": {
+   "id": "R32",
+   "inputs": [
+    "net_spec_pct_oi",
+    "pctile_3y"
+   ],
+   "condition": "pctile_3y >= 95 or <= 5 (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "POSITIONING_EXTREME",
+   "implies": "Mixed evidence. Speculators tend to be trend followers (Boos & Grob), and speculative-pressure portfolios that FOLLOW net positioning earned positive excess returns (Fan et al. 2018). Extremes do raise squeeze/unwind risk when a catalyst hits (yen shorts before Aug 2024, per BIS).",
+   "sentence": "Speculative net positioning in {market} is at a {pctile} percentile extreme. Research does not support simply fading extremes, since speculators are often right on trend, but crowded positions have historically amplified moves when a shock forces an unwind.",
+   "caveats": [
+    "Weekly data with a 3-day lag (Tuesday positions, Friday release)"
+   ],
+   "confidence": "L-M",
+   "citations": [
+    {
+     "url": "https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm",
+     "verified": "known"
+    },
+    {
+     "url": "https://digitalcollection.zhaw.ch/bitstream/11475/26934/3/2022_Boos-Grob_Tracking-speculative-trading.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.bis.org/publ/bisbull90.htm",
+     "verified": "search"
+    }
+   ]
+  },
+  "R33": {
+   "id": "R33",
+   "inputs": [
+    "fg_index"
+   ],
+   "condition": {
+    "EXTREME_FEAR": "fg <= 24",
+    "FEAR": "25-44",
+    "NEUTRAL": "45-55",
+    "GREED": "56-75",
+    "EXTREME_GREED": ">= 76"
+   },
+   "threshold_provenance": "SOURCE (CNN bands, as reported by secondary sources)",
+   "tag": "FG_{band}",
+   "implies": "Composite of 7 equal-weighted indicators (momentum, strength, breadth, put/call, junk bond demand, volatility, safe-haven demand). Redundant with the underlying inputs.",
+   "sentence": "The Fear & Greed index reads {level} ({band}). It is a composite of indicators already shown elsewhere in this brief and has no established academic track record as a timing tool.",
+   "caveats": [
+    "Proprietary; double-counts VIX/put-call/breadth, so give it low weight in AI scoring"
+   ],
+   "confidence": "L",
+   "citations": [
+    {
+     "url": "https://money.cnn.com/data/fear-and-greed/",
+     "verified": "search"
+    },
+    {
+     "url": "https://pro.thestreet.com/market-commentary/everything-you-ever-wanted-to-know-about-the-cnn-fear-greed-index",
+     "verified": "search"
+    }
+   ]
+  },
+  "R34": {
+   "id": "R34",
+   "inputs": [
+    "ret_cyclicals_20d (XLY+XLI+XLB+XLF)",
+    "ret_defensives_20d (XLU+XLP+XLV)"
+   ],
+   "condition": "(defensives - cyclicals) z >= 2 AND 10y falling -> DEFENSIVE_ROTATION",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "DEFENSIVE_ROTATION / CYCLICAL_ROTATION",
+   "implies": "Defensive leadership with falling yields has historically accompanied growth scares. Cyclical leadership with rising yields accompanies reflation.",
+   "sentence": "Defensive sectors outperformed cyclicals by {spread}% over {window} while yields fell. Historically, this mix has accompanied growth worries, though sector moves also reflect earnings and positioning.",
+   "caveats": [
+    "Sector composition changes (e.g. tech/communications reclassification)"
+   ],
+   "confidence": "L-M",
+   "citations": [
+    {
+     "url": "https://nber.org/papers/w11312",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cmegroup.com/insights/economic-research/2024/five-major-factors-that-can-swing-treasury-yields.html",
+     "verified": "search"
+    }
+   ]
+  },
+  "R35": {
+   "id": "R35",
+   "inputs": [
+    "kre_ret_1d",
+    "chg_2s10s_bp",
+    "chg_10y_bp"
+   ],
+   "condition": "kre_ret - spx_ret z <= -2 (regional bank stress) OR bank stocks rising with bear steepening",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "BANKS_VS_CURVE",
+   "implies": "Fed research (English, Van den Heuvel, Zakrajšek): unexpected steepening raises NIMs, but rising long rates also cause capital losses on long-duration assets (visible in March 2023). The bank-stock reaction is ambiguous.",
+   "sentence": "Regional banks moved {chg}% as the curve {curve_move}. Fed research finds steeper curves have historically supported bank margins, but sharp rises in long rates can hurt banks through securities losses, so the net effect varies.",
+   "caveats": [
+    "BoE and DNB find a weak slope-NIM link in other countries"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.federalreserve.gov/pubs/feds/2012/201226/index.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://bankunderground.co.uk/2018/01/18/is-a-steeper-yield-curve-good-news-for-banks-a-challenge-to-the-conventional-wisdom/",
+     "verified": "search"
+    }
+   ]
+  },
+  "R36": {
+   "id": "R36",
+   "inputs": [
+    "iwm_minus_spy_ret_5d",
+    "chg_2y_bp_5d",
+    "chg_implied_cuts"
+   ],
+   "condition": "sign(iwm_minus_spy) == -sign(chg_2y) AND |z| >= 1.5",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "SMALLCAP_RATE_SENSITIVITY",
+   "implies": "The Russell 2000 carries far more floating-rate debt (about 30% per 2026 Bloomberg/Apollo data; older estimates higher) and higher interest/EBITDA than the S&P 500, and about 40% of constituents are unprofitable. Small caps have tended to outperform on falling front-end yields / dovish repricing and underperform on hawkish moves.",
+   "sentence": "Small caps {out_under}performed large caps by {spread}% as 2Y yields moved {chg2y}bp. Because small caps rely more on floating-rate debt, they have historically been more sensitive to Fed-path repricing than large caps.",
+   "caveats": [
+    "Floating-rate share estimates vary widely by source/date",
+    "Small-cap rallies on cut hopes have often faded when cuts came with recession"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://spglobal.com/market-intelligence/en/news-insights/research/us-small-caps-continue-to-ride-the-interest-rate-roller-coaster",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.wisdomtree.com/us/insights/blog/how-to-avoid-leverage-risks-in-small-caps",
+     "verified": "search"
+    }
+   ]
+  },
+  "R37": {
+   "id": "R37",
+   "inputs": [
+    "actual",
+    "consensus",
+    "stdev_hist_surprise"
+   ],
+   "condition": "std_surprise = (actual - consensus)/stdev_hist_surprise; |std_surprise| >= 1",
+   "threshold_provenance": "SOURCE (standardised surprise method, Andersen et al.); the 1 SD cutoff is APP_HEURISTIC",
+   "tag": "DATA_SURPRISE_{UP|DOWN}",
+   "implies": "Surprises cause immediate price jumps. Bonds react most. Bad news moves prices more than good news (sign effect). Equity response depends on the cycle: in expansions, bad macro news has tended to be good for stocks via lower expected rates; in recessions, the opposite.",
+   "sentence": "{release} came in at {actual} vs {consensus} expected, a {std_surprise} standard-deviation surprise. Historically, bonds react most to such surprises. Whether stocks follow depends on whether markets read the news through a growth lens or a Fed lens.",
+   "caveats": [
+    "Consensus quality varies",
+    "Revisions to prior months can dominate the headline"
+   ],
+   "confidence": "H",
+   "citations": [
+    {
+     "url": "https://nber.org/papers/w11312",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.nber.org/papers/w8959",
+     "verified": "search"
+    }
+   ]
+  },
+  "R38": {
+   "id": "R38",
+   "inputs": [
+    "nfp_surprise_k",
+    "cpi_core_mom_surprise_pp",
+    "chg_2y_bp_on_release"
+   ],
+   "condition": "core CPI m/m surprise >= +0.1pp OR NFP surprise z >= 1, AND chg_2y on day >= +8bp (APP_HEURISTIC)",
+   "threshold_provenance": "APP_HEURISTIC",
+   "tag": "HAWKISH_DATA_REACTION",
+   "implies": "In inflation-dominated regimes, upside inflation/jobs surprises have lifted front-end yields and the dollar and pushed stocks down together (positive stock-bond correlation, 2022).",
+   "sentence": "{release} surprised by {surprise}, and 2Y yields moved {chg2y}bp. In inflation-focused regimes like 2022, hot data has historically pushed yields and the dollar up and stocks down together. In growth-focused regimes, strong data has been read more positively.",
+   "caveats": [
+    "Regime-dependent (AQR/MSCI)"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.msci.com/research-and-insights/quick-take/has-inflation-affected-the-bond-equity-relationship",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.wealthmanagement.com/equities/implications-regime-shifting-stock-and-bond-correlations",
+     "verified": "search"
+    },
+    {
+     "url": "https://nber.org/papers/w11312",
+     "verified": "search"
+    }
+   ]
+  },
+  "R39": {
+   "id": "R39",
+   "inputs": [
+    "ism_mfg_pmi"
+   ],
+   "condition": {
+    "MFG_EXPANSION": "pmi > 50",
+    "MFG_CONTRACTION": "pmi < 50",
+    "ECON_CONTRACTION_SIGNAL": "pmi <= 42.3 sustained"
+   },
+   "threshold_provenance": "SOURCE (ISM: >50 = manufacturing expanding; >42.3 sustained = overall economy generally expanding)",
+   "tag": "{band}",
+   "implies": "Below 50 = manufacturing contraction, but the overall economy has historically still grown above 42.3. A move back above 50 has historically been associated with cyclical/commodity outperformance and rising yields.",
+   "sentence": "ISM manufacturing is {level}. ISM notes readings above 50 indicate manufacturing expansion, and readings above 42.3 over time have generally been consistent with overall economic expansion.",
+   "caveats": [
+    "Manufacturing is about 10% of GDP. ISM manufacturing was below 50 for long stretches in 2022-25 without recession"
+   ],
+   "confidence": "H (definitional)",
+   "citations": [
+    {
+     "url": "https://www.ismworld.org/supply-management-news-and-reports/news-publications/inside-supply-management-magazine/2025-may-june2/manufacturing",
+     "verified": "search"
+    },
+    {
+     "url": "https://ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/pmi/June",
+     "verified": "search"
+    }
+   ]
+  },
+  "R40": {
+   "id": "R40",
+   "inputs": [
+    "ism_new_orders",
+    "ism_inventories"
+   ],
+   "condition": "new_orders crosses 50 OR (new_orders - inventories) changes sign (APP_HEURISTIC)",
+   "threshold_provenance": "SOURCE for the 50 line (ISM diffusion index). The NO-minus-inventories spread is a practitioner CONVENTION",
+   "tag": "NEW_ORDERS_TURN",
+   "sentence": "ISM new orders are {level}. As a diffusion index, readings above 50 indicate more firms reporting rising orders, which practitioners treat as a leading component of the headline PMI.",
+   "caveats": [
+    "Monthly noise; use 3-month average"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/pmi/",
+     "verified": "known"
+    }
+   ]
+  },
+  "R41": {
+   "id": "R41",
+   "series": "ICSA (initial), CCSA (continuing)",
+   "inputs": [
+    "claims_4wk_avg",
+    "claims_4wk_min_12m"
+   ],
+   "condition": "claims_4wk_avg >= 1.2 * claims_4wk_min_12m (APP_HEURISTIC) OR claims > 400k (CONVENTION)",
+   "threshold_provenance": "400k = CONVENTION tested by the St. Louis Fed (they find the optimal threshold varies a lot over time; continuing-claims optimal average about 3m). 20% rise from trough = APP_HEURISTIC",
+   "tag": "CLAIMS_RISING",
+   "implies": "Sustained rises in claims have historically signalled labour market weakening and rallied Treasuries. But many rises were not followed by recession (Richmond Fed found 26 such non-recession instances).",
+   "sentence": "The 4-week average of jobless claims is {level}k, up {chg_pct}% from its 12-month low. St. Louis Fed research finds claims can signal turning points, but no fixed threshold works across eras, and many past rises did not lead to recession.",
+   "caveats": [
+    "Seasonal adjustment noise (holidays, auto retooling, hurricanes)",
+    "Claims are not an NBER dating criterion"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.stlouisfed.org/on-the-economy/2025/jan/are-initial-jobless-claims-useful-gauge-labor-market-conditions",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.stlouisfed.org/on-the-economy/2025/mar/are-continued-jobless-claims-useful-gauge-labor-market-conditions",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.richmondfed.org/research/national_economy/macro_minute/2024/labor_market_concerns_20240924",
+     "verified": "search"
+    }
+   ]
+  },
+  "R42": {
+   "id": "R42",
+   "series": "SAHMREALTIME",
+   "inputs": [
+    "u3_3mma",
+    "min_u3_3mma_prior_12m"
+   ],
+   "condition": "u3_3mma - min_u3_3mma_prior_12m >= 0.50pp",
+   "threshold_provenance": "SOURCE (Sahm 2019; FRED)",
+   "tag": "SAHM_TRIGGERED",
+   "implies": "Historically triggered early in every US recession since 1970, usually within a few months of onset. It is a real-time recession DATING indicator, not a predictor.",
+   "sentence": "The Sahm rule indicator is {level}pp (trigger at 0.50). Historically, crossing 0.50 has coincided with the early months of US recessions. It identifies recessions in real time rather than predicting them, and it triggered in August 2024 without a recession, partly because of labour-supply growth.",
+   "caveats": [
+    "The 2024 trigger was a false positive / special case tied to immigration-driven labour supply",
+    "Unemployment rate revisions each January"
+   ],
+   "confidence": "M-H",
+   "citations": [
+    {
+     "url": "https://fred.stlouisfed.org/series/SAHMREALTIME",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.hamiltonproject.org/publication/policy-proposal/direct-stimulus-payments-to-individuals/",
+     "verified": "known"
+    }
+   ]
+  },
+  "R43": {
+   "id": "R43",
+   "inputs": [
+    "cb_expectations_index"
+   ],
+   "condition": "cb_expectations_index < 80",
+   "threshold_provenance": "SOURCE (Conference Board: 80 historically signals recession within a year)",
+   "tag": "CONSUMER_EXPECTATIONS_RECESSION_ZONE",
+   "sentence": "The Conference Board Expectations Index is {level}, below the 80 level the Conference Board says has historically signalled recession ahead. The index has spent long stretches below 80 since 2022 without a recession, so it is a weak timing signal.",
+   "caveats": [
+    "Sentiment-spending gap since 2022",
+    "Partisan and inflation-driven swings"
+   ],
+   "confidence": "L-M",
+   "citations": [
+    {
+     "url": "https://www.conference-board.org/topics/consumer-confidence/press/CCI-Mar-2025",
+     "verified": "search"
+    },
+    {
+     "url": "https://conference-board.org/topics/consumer-confidence",
+     "verified": "search"
+    }
+   ]
+  },
+  "R44": {
+   "id": "R44",
+   "inputs": [
+    "lei_6m_ann_growth",
+    "lei_6m_diffusion"
+   ],
+   "condition": "lei_6m_diffusion < 50 AND lei_6m_ann_growth <= depth_threshold (about -4.0% to -4.4%, set per release)",
+   "threshold_provenance": "SOURCE (Conference Board 3Ds rule). Depth threshold varies by release",
+   "tag": "LEI_RECESSION_SIGNAL",
+   "sentence": "The LEI's 6-month annualised change is {level}% with a diffusion of {diff}. When both criteria of the Conference Board's 3Ds rule are met, it has historically signalled recession, but the rule flashed through 2022-24 without one.",
+   "caveats": [
+    "Goods/manufacturing-heavy components; long false signal in 2022-24"
+   ],
+   "confidence": "L-M",
+   "citations": [
+    {
+     "url": "https://conference-board.org/publications/Leading-Indicators-Recession",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.conference-board.org/topics/us-leading-indicators/press/us-lei-jan-2024",
+     "verified": "search"
+    }
+   ]
+  },
+  "R45": {
+   "id": "R45",
+   "inputs": [
+    "ebp_bp",
+    "ebp_chg_3m"
+   ],
+   "condition": "ebp_bp > 0 and rising (APP_HEURISTIC); EBP-implied recession prob from Fed model",
+   "threshold_provenance": "SOURCE for the model (Favara, Gilchrist, Lewis, Zakrajšek 2016). Zero line = APP_HEURISTIC",
+   "tag": "EBP_RISING",
+   "sentence": "The excess bond premium is {level}bp. Fed research finds a rising EBP, which signals lower risk-bearing capacity in the financial sector, has added information about recession risk beyond the yield curve, notably before 2007-09.",
+   "caveats": [
+    "Monthly; full history revises"
+   ],
+   "confidence": "M-H",
+   "citations": [
+    {
+     "url": "https://www.federalreserve.gov/econresdata/notes/feds-notes/2016/recession-risk-and-the-excess-bond-premium-20160408.html",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.nber.org/reporter/2018number4/role-financial-factors-economic-fluctuations",
+     "verified": "search"
+    }
+   ]
+  },
+  "R46": {
+   "id": "R46",
+   "inputs": [
+    "vix",
+    "ipo_count_30d",
+    "ipo_index_ret_30d"
+   ],
+   "condition": {
+    "IPO_WINDOW_OPEN": "vix < 20 AND recent IPOs trading above issue",
+    "IPO_WINDOW_STRAINED": "20 <= vix < 25",
+    "IPO_WINDOW_SHUT": "vix >= 25 (activity virtually nonexistent > 40)"
+   },
+   "threshold_provenance": "SOURCE-practitioner (Renaissance Capital: IPO activity typically hampered when VIX > 20-25, virtually nonexistent > 40; CFO.com: under 20, ideally mid-teens)",
+   "tag": "{band}",
+   "sentence": "VIX is {vix}. Renaissance Capital notes IPO activity has typically been hampered with VIX above 20-25 and has nearly stopped above 40. Issuers often delay launches in such conditions, as several did in April 2025.",
+   "caveats": [
+    "Backlog can force deals through elevated vol (74 IPOs priced in 2020 with median VIX 28)",
+    "Practitioner heuristics, not peer-reviewed"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.renaissancecapital.com/IPO-Center/News/55023/What-happens-to-the-IPO-market-when-volatility-spikes",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.renaissancecapital.com/IPO-Center/News/110314/ipo-timelines-shift-as-vix-reaches-highest-level-since-2020",
+     "verified": "search"
+    },
+    {
+     "url": "https://www.cfo.com/news/weekly-stat-high-volatility-index-readings-curb-ipos/655117/",
+     "verified": "search"
+    }
+   ]
+  },
+  "R47": {
+   "id": "R47",
+   "inputs": [
+    "hy_yield_pct (BAMLH0A0HYM2EY)",
+    "hy_oas_bp",
+    "lev_loan_price (Morningstar/LSTA LLI avg bid)",
+    "hy_issuance_30d"
+   ],
+   "condition": {
+    "FINANCING_OPEN": "lev_loan_price >= 97 AND hy_oas pctile <= 40 (APP_HEURISTIC)",
+    "FINANCING_TIGHT": "lev_loan_price < 92 OR hy_oas_chg_20d >= +100 (APP_HEURISTIC)"
+   },
+   "threshold_provenance": "APP_HEURISTIC (price near par = strong demand is a CONVENTION; no official cutoff)",
+   "tag": "{band}",
+   "implies": "Loan prices near par and tight HY spreads have historically supported syndicated LBO financing, repricings and dividend recaps. Falling loan prices and HY spread spikes have historically pushed sponsors toward private credit or shelved deals.",
+   "sentence": "Leveraged loans average {price} and HY yields are {hy_yield}%. Historically, loan prices near par with tight spreads have marked open financing windows for leveraged M&A, while sharp spread widening has closed the syndicated market and shifted deals to private credit.",
+   "caveats": [
+    "Private credit now finances a large share of LBOs (PitchBook LCD), so syndicated data understates availability",
+    "LSTA full data are members-only"
+   ],
+   "confidence": "M",
+   "citations": [
+    {
+     "url": "https://www.lsta.org/content-category/monthly-index-review/",
+     "verified": "search"
+    },
+    {
+     "url": "https://files.pitchbook.com/website/files/pdf/LCD_PitchBook_Webinar_23.07.12.pdf",
+     "verified": "search"
+    },
+    {
+     "url": "https://federalreserve.gov/econresdata/feds/2015/files/2015028r1pap.pdf",
+     "verified": "search"
+    }
+   ]
+  }
+ },
+ "regimes": {
+  "window": "1d (intraday brief) and 5d (weekly context)",
+  "leg_qualifier": "|z| >= 1 using 60-day stdev of the leg's changes",
+  "match": "all required legs match sign; optional legs add confidence",
+  "output": {
+   "tag": "G#",
+   "confidence": "share of legs matched",
+   "sentence": "template with filled placeholders + disclaimer"
+  },
+  "conflict_resolution": "if G1 and G2 both match partially, prefer the one whose 2Y leg matches (policy vs growth)",
+  "never": [
+   "state a price target",
+   "say 'will'",
+   "present APP_HEURISTIC thresholds as sourced facts"
+  ]
+ }
+}
