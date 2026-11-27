@@ -19,8 +19,8 @@ from filelock import FileLock
 from . import catalog
 from .archive import _atomic_write
 from .guardrails import safe_http_url
+from .paths import DATA_DIR, PROJECT_ROOT
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PROFILE_VERSION = 1
 MAX_WATCHLIST, MAX_INSTRUMENTS, MAX_FEEDS = 60, 200, 40
 ROLES = ("client", "peer", "watch")
@@ -44,7 +44,7 @@ def profile_path(settings=None) -> Path:
     if explicit:
         return Path(explicit)
     archive = getattr(settings, "archive_dir", None)
-    return (Path(archive).parent if archive else PROJECT_ROOT / "var") / "profile.json"
+    return (Path(archive).parent if archive else DATA_DIR) / "profile.json"
 
 
 def _text(value, field, limit=120, required=True):

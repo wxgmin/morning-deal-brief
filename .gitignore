@@ -3,6 +3,9 @@
 
 # Python
 .venv/
+.venv-build/
+build/
+dist/
 __pycache__/
 *.pyc
 *.egg-info/

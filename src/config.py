@@ -15,10 +15,10 @@ import yaml
 from dotenv import load_dotenv
 
 from .models import Company
+from .paths import DATA_DIR, ENV_FILE, PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COVERAGE_PATH = PROJECT_ROOT / "config" / "coverage.yaml"
 
 
@@ -45,7 +45,7 @@ class Settings:
     delivery: str = "none"
     timezone: str = "America/New_York"
     briefing_time: time = time(7, 45)
-    archive_dir: Path = PROJECT_ROOT / "var" / "archive"
+    archive_dir: Path = DATA_DIR / "archive"
     demo_archive_dir: Path | None = None
     market_provider: str = "yahoo"
     market_fallback: str = "none"
@@ -125,12 +125,12 @@ def _int_env(name: str, default: int) -> int:
 
 
 def _load_settings() -> Settings:
-    load_dotenv(PROJECT_ROOT / ".env", override=False)
+    load_dotenv(ENV_FILE, override=False)
 
     def split_emails(v: str) -> list:
         return [x.strip() for x in (v or "").split(",") if x.strip()]
 
-    default_archive = PROJECT_ROOT / "var" / "archive"
+    default_archive = DATA_DIR / "archive"
     archive_dir = Path(os.getenv("ARCHIVE_DIR") or default_archive)
     settings = Settings(
         llm_provider=(os.getenv("LLM_PROVIDER") or "none").strip().lower(),

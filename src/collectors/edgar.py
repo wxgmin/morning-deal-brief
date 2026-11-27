@@ -7,13 +7,13 @@ import os
 import re
 import time
 from datetime import date, timedelta
-from pathlib import Path
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup
 
 from ..archive import _atomic_write
 from ..models import RawItem, SOURCE_EDGAR
+from ..paths import CACHE_DIR as _CACHE_DIR
 from ..util import get_bytes
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,6 @@ FORM_EVENT_MAP = {
 _SEC_TICKERS = "https://www.sec.gov/files/company_tickers.json"
 _SUBMISSIONS = "https://data.sec.gov/submissions/"
 _ARCHIVES = "https://www.sec.gov/Archives/edgar/data/"
-_CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache"
 _ACCESSION = re.compile(r"\d{10}-\d{2}-\d{6}")
 _DOCUMENT = re.compile(r"[\w.-]+(?:/[\w.-]+)*")
 _last_request = 0.0
